@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  python-lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dev tools
+        run: python -m pip install --upgrade pip pytest ruff mypy
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Type-check tests and core tools with mypy
+        run: mypy tests/ tftp_server.py tools/mkciscoimage.py
+
+      - name: Run unit tests
+        run: pytest
+
+  dts-and-c-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dtc and cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y device-tree-compiler cppcheck
+
+      - name: Validate Device Tree syntax
+        run: dtc -I dts -O dtb -o /dev/null dts/cisco-3702i.dts
+
+      - name: Static analysis on userspace C tools
+        run: cppcheck --enable=warning,performance,portability --error-exitcode=0 tools/*.c
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
