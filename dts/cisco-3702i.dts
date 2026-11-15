@@ -87,8 +87,19 @@
 				#size-cells = <1>;
 
 				partition@0 {
-					label = "full_flash";
-					reg = <0x00000000 0x04000000>;
+					label = "flashfs_low";
+					reg = <0x00000000 0x03800000>;
+					read-only;
+				};
+
+				partition@3800000 {
+					label = "rootfs_data";
+					reg = <0x03800000 0x00400000>;
+				};
+
+				partition@3c00000 {
+					label = "rommon_env";
+					reg = <0x03c00000 0x00400000>;
 					read-only;
 				};
 			};

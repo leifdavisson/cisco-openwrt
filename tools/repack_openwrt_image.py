@@ -148,7 +148,7 @@ def main():
     with open(os.path.join(modules_d, "20-p1023-fman"), "w") as f:
         f.write("marvell\np1023_fman_im\n")
 
-    # Network config
+    # Network config (DHCP client on br-lan for dumb AP mode)
     net_cfg = """config interface 'loopback'
 	option device 'lo'
 	option proto 'static'
@@ -162,14 +162,46 @@ config device
 
 config interface 'lan'
 	option device 'br-lan'
-	option proto 'static'
-	option ipaddr '192.168.1.50'
-	option netmask '255.255.255.0'
-	option gateway '192.168.1.1'
-	option dns '192.168.1.1'
+	option proto 'dhcp'
 """
     with open(os.path.join(ROOTFS_DIR, "etc/config/network"), "w") as f:
         f.write(net_cfg)
+
+    # Wireless config (dual-band AP broadcasting 'OpenWRT')
+    wireless_cfg = """config wifi-device 'radio0'
+	option type 'mac80211'
+	option path 'e0009000.pcie/pci9000:00/9000:00:00.0/9000:01:00.0'
+	option channel '36'
+	option band '5g'
+	option htmode 'VHT80'
+	option disabled '0'
+	option country 'US'
+
+config wifi-iface 'default_radio0'
+	option device 'radio0'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'OpenWRT'
+	option encryption 'none'
+
+config wifi-device 'radio1'
+	option type 'mac80211'
+	option path 'e000a000.pcie/pcia000:02/a000:02:00.0/a000:03:00.0'
+	option channel '6'
+	option band '2g'
+	option htmode 'HT20'
+	option disabled '0'
+	option country 'US'
+
+config wifi-iface 'default_radio1'
+	option device 'radio1'
+	option network 'lan'
+	option mode 'ap'
+	option ssid 'OpenWRT'
+	option encryption 'none'
+"""
+    with open(os.path.join(ROOTFS_DIR, "etc/config/wireless"), "w") as f:
+        f.write(wireless_cfg)
 
     # DHCP config - MUST disable DHCP server on LAN
     dhcp_cfg = """config dnsmasq
@@ -217,8 +249,7 @@ insmod /lib/modules/5.15.167/marvell.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/p1023_fman_im.ko 2>/dev/null || true
 ip link set eth0 up 2>/dev/null || true
 ip link set br-lan up 2>/dev/null || true
-ip addr add 192.168.1.50/24 dev br-lan 2>/dev/null || true
-ip route add default via 192.168.1.1 dev br-lan 2>/dev/null || true
+/etc/init.d/network reload 2>/dev/null || true
 /etc/init.d/dropbear restart 2>/dev/null || true
 /etc/init.d/uhttpd restart 2>/dev/null || true
 
@@ -231,11 +262,52 @@ insmod /lib/modules/5.15.167/cfg80211.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mac80211.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mwlwifi.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mwl8k.ko 2>/dev/null || true
+(sleep 5; wifi up) >/dev/null 2>&1 &
 exit 0
 """
     with open(os.path.join(ROOTFS_DIR, "etc/rc.local"), "w") as f:
         f.write(rc_local)
     os.chmod(os.path.join(ROOTFS_DIR, "etc/rc.local"), 0o755)
+
+    # Preinit initramfs hook to mount JFFS2 rootfs_data (/overlay) and pivot_root
+    preinit_overlay = """# SPDX-License-Identifier: GPL-2.0-or-later OR AGPL-3.0-or-later
+do_mount_initramfs_overlay() {
+	local mtd_dev mtd_idx mtd_blk
+	mtd_dev=$(awk -F: '/"rootfs_data"/ {print $1}' /proc/mtd)
+	[ -n "$mtd_dev" ] || return 0
+	mtd_idx=${mtd_dev#mtd}
+	mtd_blk="/dev/mtdblock${mtd_idx}"
+	[ -b "$mtd_blk" ] || mknod "$mtd_blk" b 31 "$mtd_idx" 2>/dev/null || return 0
+
+	mkdir -p /overlay /mnt
+	if ! mount -t jffs2 "$mtd_blk" /overlay 2>/dev/null; then
+		echo "[overlay] Erasing /dev/$mtd_dev for JFFS2..."
+		mtd erase "/dev/$mtd_dev" >/dev/null 2>&1 || return 0
+		mount -t jffs2 "$mtd_blk" /overlay || return 0
+	fi
+
+	mkdir -p /overlay/upper /overlay/work
+	if mount -t overlay overlay -o "noatime,lowerdir=/,upperdir=/overlay/upper,workdir=/overlay/work" /mnt; then
+		mkdir -p /mnt/rom /mnt/overlay /mnt/proc /mnt/sys /mnt/dev /mnt/tmp
+		mount --move /proc /mnt/proc 2>/dev/null || true
+		mount --move /sys /mnt/sys 2>/dev/null || true
+		mount --move /dev /mnt/dev 2>/dev/null || true
+		mount --move /tmp /mnt/tmp 2>/dev/null || true
+		mount --move /overlay /mnt/overlay 2>/dev/null || true
+		pivot_root /mnt /mnt/rom
+		echo "[overlay] Mounted JFFS2 overlay on /"
+	else
+		echo "[overlay] Warning: overlayfs mount on / failed; keeping initramfs root"
+	fi
+}
+
+boot_hook_add initramfs do_mount_initramfs_overlay
+"""
+    preinit_dir = os.path.join(ROOTFS_DIR, "lib/preinit")
+    os.makedirs(preinit_dir, exist_ok=True)
+    with open(os.path.join(preinit_dir, "75_mount_overlay"), "w") as f:
+        f.write(preinit_overlay)
+    os.chmod(os.path.join(preinit_dir, "75_mount_overlay"), 0o644)
 
     # 7. Repack cpio and compress with LZMA
     print("[*] Repacking cpio archive with fakeroot...")

@@ -252,3 +252,32 @@ By extracting `ap3g2-bl-3600` (640 KB bzip2-compressed bootloader binary) from C
 1. Test `radio_reset.ko`; re-run `tools/pci_bar_test`.
 2. If BAR still `0xffffffff`: fix CY22393 reads (separate write/read), probe GPIO 9/10, diff ATMU/BAR setup vs ROMMON `init_pci`/`show_pci`.
 3. Then `mwlwifi` bring-up, image baking, flash persistence.
+
+---
+
+## Phase 4: Dual-Band Wi-Fi Bring-Up, Standalone Flash Boot & JFFS2 `/overlay` Persistence (2026-11-15)
+
+### 1. Root Cause Resolution for PCIe Radios & Dual-Band AP Mode
+- **PCIe LAW Ranges Fixed in [`dts/cisco-3702i.dts`](../dts/cisco-3702i.dts):** `pcie@e0009000` (`pci0`) maps to `0x80000000` (`LAW03`) and `pcie@e000a000` (`pci1`) maps to `0xa0000000` (`LAW01`).
+- **Dual-Driver Architecture:**
+  - `9000:01:00.0` (`11ab:b050`, Marvell 88W8864 5 GHz 802.11ac) binds to `driver/mwlwifi/mwlwifi.ko` with firmware `88W8864.bin` (`phy0`, `VHT80`, channel 36, 23 dBm).
+  - `a000:03:00.0` (`11ab:b024`, Marvell 88W8764 2.4 GHz 802.11n) binds to `driver/mwl8k/mwl8k.ko` with firmware `fmimage_8764_ap-1.fw` (`phy1`, `HT20`, channel 6, 18 dBm).
+- **Standalone AP & DHCP Configuration:** Configured `br-lan` (`eth0` + `phy0-ap0` + `phy1-ap0`) as a DHCP client (`proto 'dhcp'`, obtained `192.168.1.243/24`) with both radios broadcasting SSID `OpenWRT`.
+
+### 2. JFFS2 `/overlay` Persistence (`rootfs_data`)
+- **Flash Layout Analysis ([`backups/full_flash_64m.bin`](../backups/full_flash_64m.bin)):**
+  - `0x00000000`–`0x02800000` (40 MiB): Active Cisco `flashfs` files (including `flash:/openwrt-3702i.bin`).
+  - `0x02800000`–`0x03d40000` (21.25 MiB): Empty `flashfs` erase blocks (`0xff` payload with 16-byte `flashfs` block headers).
+  - `0x03d40000`–`0x04000000` (2.75 MiB): Cisco certs/config, NVRAM, and ROMMON bootloader.
+- **MTD Partitioning & Preinit Hook:**
+  - Defined `flashfs_low` (`0x00000000`–`0x03800000`, RO), `rootfs_data` (`0x03800000`–`0x03c00000`, 4 MiB RW), and `rommon_env` (`0x03c00000`–`0x04000000`, RO) in [`dts/cisco-3702i.dts`](../dts/cisco-3702i.dts).
+  - Added `/lib/preinit/75_mount_overlay` in [`tools/repack_openwrt_image.py`](../tools/repack_openwrt_image.py) to format/mount `/dev/mtdblock1` (`rootfs_data`) as JFFS2 on `/overlay` and pivot `/` onto `overlayfs`.
+
+### 3. Audit of Previous Work & Next Actions
+- **Fixed in this session:**
+  - `tools/poe_bounce_to_rommon.py`: Fixed `\x1b` flood after `ap:` prompt (which caused a ~35s `*** line too large ***` delay) and closed the serial port before returning.
+  - `tools/repack_openwrt_image.py`: Fixed `mtd erase "/dev/$mtd_dev"` device path and added `(sleep 5; wifi up) &` in `/etc/rc.local` so `phy0-ap0` and `phy1-ap0` start after `mwl8k` completes hardware initialization.
+- **Remaining Next Actions:**
+  1. **Verify Cold-Reboot JFFS2 Retention:** Confirm ROMMON `flashfs fsck` does not touch `0x03800000`–`0x03c00000` across a cold reboot.
+  2. **Resolve `mwl8k` MPIC Interrupt Line:** Identify the hardware IRQ pin for `pci1` (`a000:03:00.0`) in [`dts/cisco-3702i.dts`](../dts/cisco-3702i.dts) so `mwl8k` does not rely on `OPC_DONE` polling (`Command ... took 9990 ms`).
+  3. **Fix OpenWrt 25.12.6 (`tools/repack_openwrt25_image.py`):** Align load/entry address (`0x01500000`) and debug early boot crash after `executing...`.

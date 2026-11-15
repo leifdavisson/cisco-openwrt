@@ -31,13 +31,15 @@ def main():
             sys.stdout.write(c)
             sys.stdout.flush()
             buf += c
-        if time.time() - last_esc > 0.3:
+        if "ap:" in buf[-16:]:
+            print("\n[+] At ROMMON ap: prompt")
+            ser.close()
+            return 0
+        if time.time() - last_esc > 0.3 and "aborted" not in buf:
             ser.write(b"\x1b")  # keep interrupting the autoboot countdown
             last_esc = time.time()
-        if buf.rstrip().endswith("ap:"):
-            print("\n[+] At ROMMON ap: prompt")
-            return 0
     print("\n[!] Timed out waiting for ap: prompt")
+    ser.close()
     return 1
 
 

@@ -21,9 +21,13 @@
 3. **Blocker #3 — PCIe Interrupt Routing (`interrupt-map`)**:
    - **Root Cause**: All three PCIe controllers were originally mapped to `&mpic 16 2` (which is the internal L2/PCIe error interrupt, not `INTx`).
    - **Status**: **`pci0` (`9000:01:00.0`, `mwlwifi`) FIXED** with `&mpic 4 2` (`OpenPIC 4 Level`, verified receiving hundreds of hardware interrupts during 5 GHz scans). `mwl8k` (`a000:03:00.0`) includes a `200 ms` `OPC_DONE` polling fallback in `mwl8k_post_cmd` and works for `wlan1` creation and 2.4 GHz scanning while its exact MPIC pin (`0..3, 7..10`) is finalized.
-4. **Blocker #4 — eLBC CFI NOR Flash Mapping & Full Backup**:
-   - **Root Cause**: `LAW00` maps the 64 MiB eLBC window at **`0xE8000000..0xEBFFFFFF`** (`trgt=0x04`).
-   - **Status**: **FIXED & BACKED UP**. `localbus@e0005000` is mapped at `0xe8000000` (`64 MiB`), `/proc/mtd` exposes `mtd0: 04000000 00020000 "full_flash"`, and the full 64 MiB flash image is backed up at [`backups/full_flash_64m.bin`](backups/full_flash_64m.bin) (backups/full_flash_64m.bin).
+4. **Blocker #4 — eLBC CFI NOR Flash Mapping, Backup & JFFS2 `/overlay` Persistence**:
+   - **Root Cause**: `LAW00` maps the 64 MiB eLBC window at **`0xE8000000..0xEBFFFFFF`** (`trgt=0x04`). Previously `/proc/mtd` exposed a single read-only `full_flash` partition (`0x04000000`) and booted as a volatile `initramfs`.
+   - **Status**: **FIXED & BACKED UP**. Full 64 MiB flash image is backed up at [`backups/full_flash_64m.bin`](backups/full_flash_64m.bin). [`dts/cisco-3702i.dts`](dts/cisco-3702i.dts) now partitions NOR flash into `flashfs_low` (`0x00000000`–`0x03800000`, RO), `rootfs_data` (`0x03800000`–`0x03c00000`, 4 MiB RW JFFS2), and `rommon_env` (`0x03c00000`–`0x04000000`, RO). [`tools/repack_openwrt_image.py`](tools/repack_openwrt_image.py) injects `/lib/preinit/75_mount_overlay` to mount `/dev/mtdblock1` on `/overlay` and pivot `/` onto `overlayfs`.
+5. **Blocker #5 — Audit Findings on Previous Scripts (`repack_openwrt25_image.py`, `poe_bounce_to_rommon.py`, `75_mount_overlay`)**:
+   - **`tools/repack_openwrt25_image.py` (OpenWrt 25.12.6 / Linux 6.12.112):** Packed the MZIP image with load/entry address `0x02000000` instead of `0x01500000` and overwrote `~/Downloads/openwrt-3702i.bin`; booting it caused an immediate crash/reset after `executing...` (`BOOT FROM RAM` in `docs/openwrt_boot.log`). Restored `~/Downloads/openwrt-3702i.bin` from `tools/repack_openwrt_image.py` (OpenWrt 23.05.5, entry `0x01500000`).
+   - **`tools/poe_bounce_to_rommon.py`:** Kept transmitting `\x1b` every 0.3s after `ap:` appeared; because `buf.rstrip().endswith("ap:")` does not strip `\x1b`, it stalled ~35s until 256 ESC bytes overflowed ROMMON (`*** line too large ***`) and left `ser` unclosed. **FIXED** by checking `"ap:" in buf[-16:]`, stopping `\x1b` once `"aborted"` appears, and closing `ser`.
+   - **`75_mount_overlay` & `rc.local`:** Initial `mtd erase mtd1` failed (`Could not open mtd device: mtd1` because OpenWrt's `mtd` requires `/dev/mtd1`), and `wifi reload` in `rc.local` ran before `mwl8k` finished probing `phy1`. **FIXED** with `mtd erase "/dev/$mtd_dev"` and `(sleep 5; wifi up) >/dev/null 2>&1 &`.
 
 ---
 
