@@ -26,6 +26,9 @@ Console cable + PoE + one command: see [docs/QUICK_INSTALL.md](docs/QUICK_INSTAL
 > file on Cisco's flash file system and loaded by the Cisco bootloader; a generic OpenWrt upgrade would overwrite
 > that file system and the bootloader area. To update, reinstall through the bootloader as in the quick-install guide.
 
+## Other models
+- **Aironet 2602i** (`AIR-CAP2602I`): same SoC and bootloader family. OpenWrt 25.12.6 RAM-boots with `dts/cisco-2602i.dts` (256 MiB, flash read-only); no Wi-Fi driver and no flash install yet. See [docs/AP2602_NOTES.md](docs/AP2602_NOTES.md).
+
 ## Project Status (OpenWrt port)
 - **Working:**
   - **OpenWrt 23.05.5 (Linux 5.15.167)** cold-boots standalone from NOR flash (`flash:/openwrt-3702i.bin`, entry `0x01500000`).

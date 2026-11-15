@@ -1,0 +1,309 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR AGPL-3.0-or-later
+/*
+ * EXPLORATORY Device Tree for the Cisco Aironet 2602i (AIR-CAP2602I, board "Tide MB").
+ *
+ * Derived from cisco-3702i.dts with two changes only:
+ *   - 256 MiB RAM instead of 512 MiB
+ *   - the NOR flash is exposed as ONE READ-ONLY partition: the 32 MiB chip is almost
+ *     completely used by the Cisco flashfs and its layout is not mapped yet, so nothing
+ *     may be written to it (no rootfs_data / JFFS2 overlay on this board).
+ *
+ * Status: OpenWrt 25.12.6 RAM-boots with this tree and the FMan Ethernet driver loads.
+ * Radios (11ab:8650, 11ab:8624) are not supported yet. See docs/AP2602_NOTES.md.
+ */
+
+/dts-v1/;
+
+/ {
+	model = "Cisco Aironet 2602i (AIR-CAP2602I)";
+	compatible = "cisco,ap2602i", "enterasys,ws-ap3710i", "fsl,P1020RDB", "fsl,P1020";
+
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	aliases {
+		serial0 = &serial0;
+		ethernet0 = &enet0;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,9600 earlyprintk root=/dev/ram0 rw pci=realloc";
+		bootargs-override = "console=ttyS0,9600 earlyprintk root=/dev/ram0 rw pci=realloc";
+		stdout-path = "/soc@e0000000/serial@4500:9600n8";
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		PowerPC,P1020@0 {
+			device_type = "cpu";
+			reg = <0x0>;
+			next-level-cache = <&L2>;
+			bus-frequency = <320000000>;
+			clock-frequency = <800000000>;
+			timebase-frequency = <40000000>;
+		};
+
+		PowerPC,P1020@1 {
+			device_type = "cpu";
+			reg = <0x1>;
+			next-level-cache = <&L2>;
+			bus-frequency = <320000000>;
+			clock-frequency = <800000000>;
+			timebase-frequency = <40000000>;
+		};
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x0 0x0 0x10000000>; // 256MB RAM (AP2602: 188398K/60928K)
+	};
+
+	localbus@e0005000 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		compatible = "fsl,p1020-elbc", "fsl,elbc", "simple-bus";
+		reg = <0x0 0xe0005000 0x0 0x1000>;
+		status = "okay";
+
+		ranges = <0x0 0x0 0x0 0xe8000000 0x04000000>; // 64MB NOR window (LAW00)
+
+		flash@0 {
+			compatible = "cfi-flash";
+			reg = <0x0 0x0 0x04000000>; // 64MB Flash
+			status = "okay";
+			bank-width = <2>;
+			device-width = <2>;
+
+			partitions {
+				compatible = "fixed-partitions";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				partition@0 {
+					label = "full_flash";
+					reg = <0x00000000 0x04000000>;
+					read-only;
+				};
+			};
+		};
+	};
+
+	soc: soc@e0000000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		device_type = "soc";
+		compatible = "fsl,p1020-immr", "simple-bus";
+		ranges = <0x0 0x0 0xe0000000 0x100000>;
+		bus-frequency = <320000000>;
+
+		serial0: serial@4500 {
+			cell-index = <0>;
+			device_type = "serial";
+			compatible = "fsl,ns16550", "ns16550";
+			reg = <0x4500 0x100>;
+			clock-frequency = <320000000>;
+			current-speed = <9600>;
+			interrupts = <42 2>;
+			interrupt-parent = <&mpic>;
+		};
+
+		mpic: pic@40000 {
+			interrupt-controller;
+			#address-cells = <0>;
+			#interrupt-cells = <2>;
+			reg = <0x40000 0x40000>;
+			compatible = "fsl,mpic";
+			device_type = "open-pic";
+		};
+
+		L2: l2-cache-controller@20000 {
+			compatible = "fsl,p1020-l2-cache-controller";
+			reg = <0x20000 0x1000>;
+			cache-line-size = <32>;
+			cache-size = <0x40000>; // 256KB L2
+			interrupt-parent = <&mpic>;
+			interrupts = <16 2>;
+		};
+
+		enet0: ethernet@b0000 {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			device_type = "network";
+			model = "eTSEC";
+			compatible = "fsl,etsec2";
+			reg = <0xb0000 0x1000>;
+			status = "okay";
+			ranges = <0x0 0xb0000 0x1000>;
+			local-mac-address = [ 00 00 00 00 00 00 ];
+			phy-handle = <&phy0>;
+			phy-connection-type = "rgmii-id";
+
+			queue-group@0 {
+				#address-cells = <1>;
+				#size-cells = <1>;
+				reg = <0xb0000 0x1000>;
+				interrupts = <29 2 30 2 34 2>;
+				interrupt-parent = <&mpic>;
+			};
+		};
+
+		mdio@24000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "fsl,gianfar-mdio";
+			reg = <0x24000 0x1000>;
+
+			phy0: ethernet-phy@0 {
+				reg = <0x0>;
+				compatible = "marvell,88e1111", "ethernet-phy-ieee802.3-c22";
+			};
+		};
+
+		i2c0: i2c@3000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			cell-index = <0>;
+			compatible = "fsl-i2c";
+			reg = <0x3000 0x100>;
+			interrupts = <43 2>;
+			interrupt-parent = <&mpic>;
+			dfsrr;
+		};
+
+		i2c1: i2c@3100 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			cell-index = <1>;
+			compatible = "fsl-i2c";
+			reg = <0x3100 0x100>;
+			interrupts = <43 2>;
+			interrupt-parent = <&mpic>;
+			dfsrr;
+		};
+
+		gpio0: gpio-controller@fc00 {
+			#gpio-cells = <2>;
+			compatible = "fsl,pq3-gpio";
+			reg = <0xfc00 0x100>;
+			interrupts = <47 2>;
+			interrupt-parent = <&mpic>;
+			gpio-controller;
+		};
+	};
+
+	pci0: pcie@e0009000 {
+		compatible = "fsl,mpc8548-pcie";
+		device_type = "pci";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		reg = <0x0 0xe0009000 0x0 0x1000>;
+		bus-range = <0 255>;
+		clock-frequency = <33333333>;
+		interrupt-parent = <&mpic>;
+		interrupts = <16 2>;
+
+		ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
+			  0x1000000 0x0 0x00000000 0 0xefc10000 0x0 0x10000>;
+
+		pcie@0 {
+			reg = <0 0 0 0 0>;
+			#interrupt-cells = <1>;
+			#size-cells = <2>;
+			#address-cells = <3>;
+			device_type = "pci";
+			interrupts = <16 2>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <
+				0000 0x0 0x0 0x1 &mpic 4 2
+				0000 0x0 0x0 0x2 &mpic 5 2
+				0000 0x0 0x0 0x3 &mpic 6 2
+				0000 0x0 0x0 0x4 &mpic 7 1
+			>;
+			ranges = <0x2000000 0x0 0x80000000
+				  0x2000000 0x0 0x80000000
+				  0x0 0x20000000
+
+				  0x1000000 0x0 0x0
+				  0x1000000 0x0 0x0
+				  0x0 0x100000>;
+		};
+	};
+
+	pci1: pcie@e000a000 {
+		compatible = "fsl,mpc8548-pcie";
+		device_type = "pci";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		reg = <0x0 0xe000a000 0x0 0x1000>;
+		bus-range = <0 255>;
+		clock-frequency = <33333333>;
+		interrupt-parent = <&mpic>;
+		interrupts = <16 2>;
+
+		ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
+			  0x1000000 0x0 0x00000000 0 0xefc20000 0x0 0x10000>;
+
+		pcie@0 {
+			reg = <0 0 0 0 0>;
+			#interrupt-cells = <1>;
+			#size-cells = <2>;
+			#address-cells = <3>;
+			device_type = "pci";
+			interrupts = <16 2>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <
+				0000 0x0 0x0 0x1 &mpic 5 2
+				0000 0x0 0x0 0x2 &mpic 6 2
+				0000 0x0 0x0 0x3 &mpic 11 2
+				0000 0x0 0x0 0x4 &mpic 7 1
+			>;
+			ranges = <0x2000000 0x0 0xa0000000
+				  0x2000000 0x0 0xa0000000
+				  0x0 0x20000000
+
+				  0x1000000 0x0 0x0
+				  0x1000000 0x0 0x0
+				  0x0 0x100000>;
+		};
+	};
+
+	pci2: pcie@e000b000 {
+		compatible = "fsl,mpc8548-pcie";
+		device_type = "pci";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		reg = <0x0 0xe000b000 0x0 0x1000>;
+		bus-range = <0 255>;
+		clock-frequency = <33333333>;
+		interrupt-parent = <&mpic>;
+		interrupts = <16 2>;
+
+		ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
+			  0x1000000 0x0 0x00000000 0 0xefc30000 0x0 0x10000>;
+
+		pcie@0 {
+			reg = <0 0 0 0 0>;
+			#interrupt-cells = <1>;
+			#size-cells = <2>;
+			#address-cells = <3>;
+			device_type = "pci";
+			interrupts = <16 2>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <
+				0000 0x0 0x0 0x1 &mpic 8 1
+				0000 0x0 0x0 0x2 &mpic 9 1
+				0000 0x0 0x0 0x3 &mpic 10 1
+				0000 0x0 0x0 0x4 &mpic 11 2
+			>;
+			ranges = <0x2000000 0x0 0xc0000000
+				  0x2000000 0x0 0xc0000000
+				  0x0 0x20000000
+
+				  0x1000000 0x0 0x0
+				  0x1000000 0x0 0x0
+				  0x0 0x100000>;
+		};
+	};
+};

@@ -39,7 +39,9 @@ jobs:
           sudo apt-get install -y device-tree-compiler cppcheck
 
       - name: Validate Device Tree syntax
-        run: dtc -I dts -O dtb -o /dev/null dts/cisco-3702i.dts
+        run: |
+          dtc -I dts -O dtb -o /dev/null dts/cisco-3702i.dts
+          dtc -I dts -O dtb -o /dev/null dts/cisco-2602i.dts
 
       - name: Static analysis on userspace C tools
         run: cppcheck --enable=warning,performance,portability --error-exitcode=0 tools/*.c
