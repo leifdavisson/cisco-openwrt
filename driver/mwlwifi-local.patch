@@ -1,5 +1,5 @@
 diff --git a/Makefile b/Makefile
-index 6c5b496..3e3d1da 100644
+index 6c5b496..4d03ee4 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -5,7 +5,7 @@ mwlwifi-objs			+= mac80211.o
@@ -11,7 +11,7 @@ index 6c5b496..3e3d1da 100644
  mwlwifi-$(CONFIG_DEBUG_FS)	+= debugfs.o
  mwlwifi-objs			+= hif/fwcmd.o
  mwlwifi-objs			+= hif/pcie/pcie.o
-@@ -17,11 +17,25 @@ mwlwifi-objs			+= hif/pcie/8997/rx.o
+@@ -17,11 +17,27 @@ mwlwifi-objs			+= hif/pcie/8997/rx.o
  mwlwifi-objs			+= hif/pcie/8964/tx_ndp.o
  mwlwifi-objs			+= hif/pcie/8964/rx_ndp.o
  
@@ -31,6 +31,8 @@ index 6c5b496..3e3d1da 100644
 +	-Wno-unused-result
 +
 +ccflags-y += $(NOSTDINC_FLAGS)
++# mac80211 >= 6.9 (OpenWrt 24.10/25.12 backports) needs the chanctx emulation ops
++ccflags-y += $(shell grep -qs ieee80211_emulate_add_chanctx $(BP_DIR)/include/net/mac80211.h && echo -DMWL_EMULATE_CHANCTX)
  ccflags-y += -O2 -funroll-loops -D__CHECK_ENDIAN__
  
  all:
@@ -666,7 +668,7 @@ index 81dbfe5..8407269 100644
  		goto err_wl_init;
  
 diff --git a/mac80211.c b/mac80211.c
-index f8ab66b..3e440c2 100644
+index f8ab66b..0f1633b 100644
 --- a/mac80211.c
 +++ b/mac80211.c
 @@ -159,7 +159,11 @@ fwcmd_fail:
@@ -781,11 +783,17 @@ index f8ab66b..3e440c2 100644
  				const struct ieee80211_tx_queue_params *params)
  {
  	struct mwl_priv *priv = hw->priv;
-@@ -956,4 +972,5 @@ const struct ieee80211_ops mwl_mac80211_ops = {
+@@ -956,4 +972,11 @@ const struct ieee80211_ops mwl_mac80211_ops = {
  	.pre_channel_switch = mwl_mac80211_chnl_switch,
  	.sw_scan_start      = mwl_mac80211_sw_scan_start,
  	.sw_scan_complete   = mwl_mac80211_sw_scan_complete,
 +	.wake_tx_queue      = ieee80211_handle_wake_tx_queue,
++#ifdef MWL_EMULATE_CHANCTX	/* mac80211 >= 6.9: non-chanctx drivers must use the emulation ops */
++	.add_chanctx		= ieee80211_emulate_add_chanctx,
++	.remove_chanctx		= ieee80211_emulate_remove_chanctx,
++	.change_chanctx		= ieee80211_emulate_change_chanctx,
++	.switch_vif_chanctx	= ieee80211_emulate_switch_vif_chanctx,
++#endif
  };
 diff --git a/thermal.h b/thermal.h
 index c7f0ad2..2fd9cc4 100644

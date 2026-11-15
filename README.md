@@ -19,6 +19,13 @@ This repository contains tools, configuration templates, and instructions for co
 - [`serial_monitor.py`](serial_monitor.py): Interactive serial console utility for monitoring and configuring the AP.
 - [`ap_setup.cfg`](ap_setup.cfg): Production-ready standalone dual-band Wi-Fi configuration with WPA2-PSK and Web GUI.
 
+## Quick Install
+Console cable + PoE + one command: see [docs/QUICK_INSTALL.md](docs/QUICK_INSTALL.md).
+
+> **Warning:** never use LuCI's "Flash new firmware" page or `sysupgrade` on this AP. OpenWrt is stored as one
+> file on Cisco's flash file system and loaded by the Cisco bootloader; a generic OpenWrt upgrade would overwrite
+> that file system and the bootloader area. To update, reinstall through the bootloader as in the quick-install guide.
+
 ## Project Status (OpenWrt port)
 - **Working:**
   - **OpenWrt 23.05.5 (Linux 5.15.167)** cold-boots standalone from NOR flash (`flash:/openwrt-3702i.bin`, entry `0x01500000`).
@@ -30,7 +37,7 @@ This repository contains tools, configuration templates, and instructions for co
 - **In Progress / Next Actions:**
   - **Verify cold-reboot JFFS2 retention:** Confirm Cisco ROMMON `flashfs fsck` does not overwrite the `0x03800000`–`0x03c00000` JFFS2 erase blocks across cold reboots; if `flashfs fsck` touches them, move persistence to a `flashfs` archive or out-of-`flashfs` region.
   - **`mwl8k` hardware IRQ pin:** Replace the `OPC_DONE` polling fallback on `pci1` (`a000:03:00.0`) with the exact MPIC interrupt line to eliminate the `Command ... took 9990 ms` log notices.
-  - **OpenWrt 25.12.6 (Linux 6.12.112) port (`tools/repack_openwrt25_image.py`):** Fix bootwrapper load/entry address (`0x01500000` vs `0x02000000`) and early UART console crash (`BOOT FROM RAM` reset).
+  - **OpenWrt 25.12.6 (Linux 6.12.112) port:** boots from RAM and from `flash:` with Ethernet, real MAC, JFFS2 overlay and both radio drivers loaded (load address fixed to the wrapper's link address `0x01600000`). Still open on 25.12.6: AP-mode test and the 2.4 GHz radio (registers, scan empty). Details and evidence: [docs/OPENWRT_25_PORT.md](docs/OPENWRT_25_PORT.md).
 - **Details:** [Open OPENWRT_PORTING_LAB_NOTEBOOK.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/OPENWRT_PORTING_LAB_NOTEBOOK.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/OPENWRT_PORTING_LAB_NOTEBOOK.md) and [Open LOWER_AI_EXECUTION_PLAN.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/LOWER_AI_EXECUTION_PLAN.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/LOWER_AI_EXECUTION_PLAN.md). Helper scripts live in `tools/` (`repack_openwrt_image.py`, `powercycle_and_boot.py`, `poe_bounce_to_rommon.py`).
 - **Upstream:** [OpenWrt](https://openwrt.org/), [mwlwifi](https://github.com/kaloz/mwlwifi), [Linux `mwl8k` firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/mwl8k).
 

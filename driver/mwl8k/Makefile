@@ -17,6 +17,8 @@ NOSTDINC_FLAGS := \
 	-Wno-unused-result
 
 ccflags-y += $(NOSTDINC_FLAGS)
+# mac80211 >= 6.9 (OpenWrt 24.10/25.12 backports) needs the chanctx emulation ops
+ccflags-y += $(shell grep -qs ieee80211_emulate_add_chanctx $(BP_DIR)/include/net/mac80211.h && echo -DMWL_EMULATE_CHANCTX)
 
 all:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=powerpc CROSS_COMPILE=$(CROSS) KBUILD_MODPOST_WARN=1 modules

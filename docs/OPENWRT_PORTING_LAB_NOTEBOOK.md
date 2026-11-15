@@ -281,3 +281,4 @@ By extracting `ap3g2-bl-3600` (640 KB bzip2-compressed bootloader binary) from C
   1. **Verify Cold-Reboot JFFS2 Retention:** Confirm ROMMON `flashfs fsck` does not touch `0x03800000`–`0x03c00000` across a cold reboot.
   2. **Resolve `mwl8k` MPIC Interrupt Line:** Identify the hardware IRQ pin for `pci1` (`a000:03:00.0`) in [`dts/cisco-3702i.dts`](../dts/cisco-3702i.dts) so `mwl8k` does not rely on `OPC_DONE` polling (`Command ... took 9990 ms`).
   3. **Fix OpenWrt 25.12.6 (`tools/repack_openwrt25_image.py`):** Align load/entry address (`0x01500000`) and debug early boot crash after `executing...`.
+     - **Update 2026-11-15 (second bench):** resolved — the wrapper has to be loaded at its link address `0x01600000`, not `0x01500000`; see [OPENWRT_25_PORT.md](OPENWRT_25_PORT.md).

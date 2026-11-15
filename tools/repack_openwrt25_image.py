@@ -41,6 +41,8 @@ INITRAMFS_OFFSET       = 0x1044b80    # 17,058,688 in vmlinux
 INITRAMFS_MAX_SIZE     = 4376803      # Original initramfs.lzma size
 SIZE_FIELD_OFFSET      = 0x1471468    # File offset of __initramfs_size in vmlinux
 KVER = "6.12.112"
+WRAPPER_LINK_ADDR      = 0x01600000   # link address of the 25.12.6 simpleImage wrapper (tools/wrapper_info.py)
+KERNEL_MEMSIZE         = 0x015613cc   # PT_LOAD memsz of the 6.12.112 initramfs vmlinux (loaded at 0)
 
 
 def run(cmd, cwd=None):
@@ -272,10 +274,13 @@ exit 0
         f.write(final_raw)
 
     # 11. Pack for Cisco ROMMON (Segment Type 0)
-    # Load at 0x02000000 (32 MiB) so decompressing vmlinux (~22.4 MiB) to 0x00000000
-    # does not overwrite the running simpleImage wrapper.
+    # The simpleImage boot wrapper is NOT position independent: it only runs at the
+    # address it was linked for. OpenWrt 25.12.6 links it at 0x01600000 (23.05.5 used
+    # 0x01500000) because the 6.12 initramfs kernel is 0x01523590 bytes and no longer
+    # fits below 0x01500000. Loading it anywhere else (0x01500000 or 0x02000000) resets
+    # the AP right after ROMMON prints "executing...". Verify with tools/wrapper_info.py.
     mkcisco = os.path.join(REPO_DIR, "tools/mkciscoimage.py")
-    run(f"python3 {mkcisco} pack-raw {OUTPUT_RAW} {FINAL_CISCO_BIN} 0x02000000")
+    run(f"python3 {mkcisco} pack-raw {OUTPUT_RAW} {FINAL_CISCO_BIN} {WRAPPER_LINK_ADDR:#010x}")
     print(f"\n[SUCCESS] OpenWrt 25.12.6 image generated: {FINAL_CISCO_BIN} ({os.path.getsize(FINAL_CISCO_BIN)} bytes)")
 
 
