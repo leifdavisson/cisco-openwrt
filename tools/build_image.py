@@ -50,30 +50,32 @@ UNUSED_MODULES = ("ath9k", "ath9k_hw", "ath9k_common", "ath", "usbcore", "ehci-h
 UNUSED_AUTOLOAD = ("ath9k", "usb-common", "usb-core", "usb-ehci", "usb2", "usb2-fsl", "fsl-mph-dr-of",
                    "ppp", "pppoe", "pppox", "slhc")
 
-MAC_HOOK = """# The per-unit Ethernet MAC is the MAC_ADDR= record of the ROMMON environment (mtd "rommon_env").
-# Without it p1023_fman_im falls back to the same 02:00:00:37:02:01 on every AP.
+MAC_HOOK = """# The per-unit Ethernet MAC: on the 3702i it is the MAC_ADDR= record in the manufacturing block
+# inside mtd "rommon_env". Without it p1023_fman_im uses the same 02:00:00:37:02:01 on every AP.
+# (The 2602i keeps its MAC in an I2C SEEPROM cookie instead - not read yet, see docs/AP2602_NOTES.md.
+# Do not scan the whole flash for MAC_ADDR=: free flashfs blocks hold stale copies that disappear.)
 cisco_fman_mac() {
 \t. /lib/functions.sh
 \t. /lib/functions/system.sh
 \tlocal mac
-\tmac=$(mtd_get_mac_ascii rommon_env MAC_ADDR)
+\tmac=$(mtd_get_mac_ascii rommon_env MAC_ADDR 2>/dev/null)
 \t[ -n "$mac" ] && printf 'marvell\\np1023_fman_im mac_str=%s\\n' "$mac" > /etc/modules.d/20-p1023-fman
 }
 
 boot_hook_add preinit_main cisco_fman_mac
 """
 
-NO_SYSUPGRADE = """# Cisco Aironet 3702i: OpenWrt lives in one file on the Cisco flashfs that only ROMMON can write.
+NO_SYSUPGRADE = """# Cisco Aironet (ap3g2): OpenWrt lives in one file on the Cisco flashfs that only ROMMON can write.
 # A generic sysupgrade would write an Enterasys flash layout over the Cisco filesystem and bootloader.
 REQUIRE_IMAGE_METADATA=1
 
 platform_check_image() {
-\techo "sysupgrade is not supported on the Cisco 3702i - reinstall through ROMMON (docs/QUICK_INSTALL.md)" >&2
+\techo "sysupgrade is not supported on this Cisco AP - reinstall through ROMMON (docs/QUICK_INSTALL.md)" >&2
 \treturn 1
 }
 
 platform_do_upgrade() {
-\techo "sysupgrade is not supported on the Cisco 3702i" >&2
+\techo "sysupgrade is not supported on this Cisco AP" >&2
 \treturn 1
 }
 """

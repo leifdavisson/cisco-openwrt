@@ -27,7 +27,7 @@ Console cable + PoE + one command: see [docs/QUICK_INSTALL.md](docs/QUICK_INSTAL
 > that file system and the bootloader area. To update, reinstall through the bootloader as in the quick-install guide.
 
 ## Other models
-- **Aironet 2602i** (`AIR-CAP2602I`): same SoC and bootloader family. OpenWrt 25.12.6 RAM-boots with `dts/cisco-2602i.dts` (256 MiB, flash read-only); no Wi-Fi driver and no flash install yet. See [docs/AP2602_NOTES.md](docs/AP2602_NOTES.md).
+- **Aironet 2602i** (`AIR-CAP2602I`): same SoC and bootloader family. OpenWrt 25.12.6 installs to `flash:` and cold-boots with working Ethernet using `dts/cisco-2602i.dts` (256 MiB, flash read-only). Not usable as an AP yet: no Wi-Fi driver, no saved settings, fallback MAC. See [docs/AP2602_NOTES.md](docs/AP2602_NOTES.md).
 
 ## Project Status (OpenWrt port)
 - **Working:**

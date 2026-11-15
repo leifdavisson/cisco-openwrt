@@ -1,8 +1,8 @@
 # Cisco Aironet 2602i — first assessment
 
-**Contribution by:** Marco Mata, 2026-11-15. **Status: exploratory.** OpenWrt runs from RAM on this
-model; it cannot be installed or used as an access point yet. Nothing below has been written to the
-unit's flash.
+**Contribution by:** Marco Mata, 2026-11-15/16. **Status: boots and stays installed, wired only.**
+OpenWrt 25.12.6 is installed on `flash:` of one test unit and survives a cold boot. There is no Wi-Fi
+driver, no saved-settings area and no per-unit MAC yet, so this is not a usable access point.
 
 The 2602i belongs to the same Cisco `ap3g2` family as the 3702i documented in this repository and
 turned out to be close enough that the 3702i work carries over with a two-line device-tree change.
@@ -26,10 +26,13 @@ turned out to be close enough that the 3702i work carries over with a two-line d
 | Ethernet MAC source | ROMMON prints `Reading cookie from SEEPROM` | `MAC_ADDR=` record in the ROMMON environment |
 | PoE class | 3 | 4 |
 
-## 2. What works (OpenWrt 25.12.6, RAM boot)
+## 2. What works (OpenWrt 25.12.6)
 
-Image: `tools/build_image.py 25 … --no-overlay --dtb dts/cisco-2602i.dtb`, loaded with
-`tools/xmodem_boot.py` (734 s at 115200 baud), load/entry `0x01600000`.
+Image: `tools/build_image.py 25 … --no-overlay --dtb dts/cisco-2602i.dtb`, load/entry `0x01600000`.
+
+### 2.1 RAM boot
+
+Loaded with `tools/xmodem_boot.py` (734 s at 115200 baud):
 
 ```text
 File "xmodem:image.bin" uncompressed and installed, entry point: 0x1600000
@@ -44,12 +47,36 @@ executing...
 
 * Same ROMMON procedure as the 3702i: `ESC` during `flashfs fsck` stops at `ap:`, `set_baud 115200`,
   `boot xmodem:` works, the image window (`0x01600000` + 8.2 MiB) is below the ROMMON at `0x06000000`.
-* Kernel 6.12.112 reaches userspace with 256 MiB; shell on the serial console.
-* `p1023_fman_im` registers `eth0` and brings the bridge up. **Link and traffic were not tested**
-  (the switch port was administratively down); the MAC is the driver's fallback because this tree has
-  no `rommon_env` partition.
+* Kernel 6.12.112 reaches userspace with 256 MiB.
 * `radio_reset.ko` (unchanged, same GPIO pulse as on the 3702i) releases both radios:
   `GPDAT 0x0f8f0000 → 0x5fef0000`, then both endpoints enumerate with the IDs in the table above.
+
+### 2.2 Installed on `flash:`
+
+`python3 tools/xmodem_boot.py <image> --install --name openwrt-2602i.bin` — the first run of the
+packaged installer on real hardware:
+
+```text
+[*] current BOOT=flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-mx.153-3.JF14
+[*] copying 8208031 bytes to flash:/openwrt-2602i.bin at 115200 baud (about 14 minutes for 8 MiB)
+[+] transfer done in 962s
+[+] installed. To go back to the Cisco software:  ap: set BOOT flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-mx.153-3.JF14
+[*] booting from flash, capturing console for 140s
+...
+Loading "flash:/openwrt-2602i.bin"...***********************
+File "flash:/openwrt-2602i.bin" uncompressed and installed, entry point: 0x1600000
+```
+
+| Check | Result |
+|---|---|
+| Boot from `flash:` (started by the installer) | OpenWrt 25.12.6 up, ping after ≈105 s |
+| Ethernet | `p1023_fman_im` unchanged: ping, SSH and LuCI over the wire (switch port up, 1 Gb/s) |
+| Cold boot, PoE off/on, nobody on the console | back on the network within 155 s, still 25.12.6 from `flash:` |
+| `sysupgrade -T` | refused by the image, as intended |
+| Cisco software | untouched; the stock `BACKUPBOOT` recovery entry is still in the ROMMON environment |
+
+The image is 8 208 384 bytes on `flash:`, which leaves roughly 0.4 MiB free (computed from the
+8 592 896 bytes that were free before; not re-read).
 
 ## 3. What does not work yet
 
@@ -57,26 +84,34 @@ executing...
    `8764`, so the candidate is `mwl8k` with the 88W8764 AP firmware plus two new PCI IDs — untested.
    On the 3702i the 8764 path still relies on command polling and returns no scan results on 25.12.6,
    so that item has to be solved first; it decides Wi-Fi on the 2602i entirely.
-2. **Flash layout / installation.** Per-128 KiB-block scan of the 32 MiB chip from Linux (read-only):
+2. **No saved settings.** Per-128 KiB-block scan of the 32 MiB chip from Linux (read-only), before the
+   install:
 
    | Range | Content |
    |---|---|
    | `0x00000000–0x00080000` | 4 blocks with only a flashfs block header |
-   | `0x00080000–0x02000000` | 252 blocks with data (Cisco flashfs) |
+   | `0x00080000–0x02000000` | 252 blocks with data (Cisco flashfs, including stale data in free blocks) |
 
-   There is no empty region like the 3702i's `0x02800000–0x03c00000`, so the JFFS2 overlay design
-   cannot be copied. ROMMON also reports a second, empty 12 MiB `flashfs[1]`, and the bootloader
-   itself has to live somewhere: both must be outside the 32 MiB that Linux currently sees (second
-   chip / chip-select or a banked upper half) — **not located yet**. Until that is mapped the
-   device tree keeps the flash read-only.
-3. **Space on `flash:`.** An 8.2 MiB image fits in the 8.6 MiB that are free with about 380 KiB to
-   spare; a persistent install would probably mean deleting the Cisco recovery image first.
-4. **Ethernet MAC.** Needs the SEEPROM cookie (I2C) instead of the ROMMON environment record.
+   There is no region outside the flashfs like the 3702i's `0x02800000–0x03c00000`, so the JFFS2
+   overlay design cannot be copied and the device tree keeps the whole chip read-only. Every setting
+   has to be baked into the image (`--ip`, `--pubkey`, …); changes made at run time are lost on
+   reboot. ROMMON also reports a second, empty 12 MiB `flashfs[1]`, and the bootloader itself has to
+   live somewhere: both must be outside the 32 MiB that Linux currently sees (second chip /
+   chip-select or a banked upper half) — **not located yet**. That region is the natural candidate
+   for an overlay.
+3. **Ethernet MAC is the driver's fallback `02:00:00:37:02:01`.** ROMMON prints
+   `Reading cookie from SEEPROM` before the base MAC, i.e. the address comes from an I2C SEEPROM, not
+   from flash. A trap worth recording: before the install, `strings` over the flash found 26
+   `MAC_ADDR=xx:..` records with this unit's MAC — they were stale copies of old Cisco files in
+   *free* flashfs blocks, and all of them were gone once the 8.2 MiB image had been written. Do not
+   build a MAC lookup on a whole-flash scan. Two 2602i units on one LAN will collide until the
+   SEEPROM is read.
+4. **Flash is nearly full.** With ≈0.4 MiB left a second image cannot be stored next to the first;
+   an update means deleting `openwrt-2602i.bin` in ROMMON first (or the Cisco recovery image).
 
 ## 4. Suggested next steps
 
-1. Bring the switch port up and confirm Ethernet traffic.
+1. Read the SEEPROM cookie over I2C and feed the MAC to `p1023_fman_im` (`mac_str=`).
 2. Solve the `mwl8k` interrupt line on the 3702i, then try `mwl8k` with IDs `0x8650` / `0x8624`.
-3. Find the second flash region (compare ROMMON `flashfs[1]` geometry with the eLBC chip-selects),
-   then decide where settings can live.
-4. Only then attempt `copy xmodem: flash:` + `set BOOT` on a 2602i.
+3. Find the second flash region (compare ROMMON `flashfs[1]` geometry with the eLBC chip-selects)
+   and put a `rootfs_data` overlay there.

@@ -359,7 +359,8 @@ to the AP, or use a single-port server (`dnsmasq --enable-tftp --tftp-single-por
 | `README.md` | status, quick-install pointer, sysupgrade warning |
 
 `tools/xmodem_boot.py` and `tools/build_image.py` are cleaned-up versions of the scripts used on the
-bench. The XMODEM sender and the ROMMON command sequence are the ones that ran on hardware; the
-packaged `--install` / `--wait-rommon` flow has so far only run against the simulated bootloader in
-`tests/test_xmodem_boot.py`. `repack_openwrt25_image.py` received the load-address fix but was not
+bench. The XMODEM sender and the ROMMON command sequence are the ones that ran on the 3702i; the
+packaged tool has since run on hardware on a 2602i, both as a RAM boot and as `--install`
+(docs/AP2602_NOTES.md). Only `--wait-rommon` has so far run solely against the simulated bootloader
+in `tests/test_xmodem_boot.py`. `repack_openwrt25_image.py` received the load-address fix but was not
 re-run on this bench.

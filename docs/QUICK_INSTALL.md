@@ -15,6 +15,7 @@ open issues are in [OPENWRT_25_PORT.md](OPENWRT_25_PORT.md) and the
 | | |
 |---|---|
 | The AP | `AIR-CAP3702I-x-K9` (tested: `-E-K9`, 40 MB flash format). Lightweight or autonomous, no password needed. |
+| | The 2602i installs the same way but has no Wi-Fi or saved settings yet — see [AP2602_NOTES.md](AP2602_NOTES.md). |
 | Power | 802.3at PoE switch or injector |
 | Console | Cisco RJ45 console cable + USB serial adapter (9600 8N1) |
 | A Linux PC | Python 3.10+ and `pip install pyserial` |
