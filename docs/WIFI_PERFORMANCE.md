@@ -180,3 +180,33 @@ With an image built from this branch (`l2cache` loaded, corrected device tree):
 The only client measurement on this bench is section 5 (one phone, 5 GHz, AP-generated UDP).
 Sections 3 and 4 are verified by the AP-side numbers only; a proper iperf3 run through the AP on
 both bands is still needed.
+
+
+---
+
+## 7. `ld-branch` Follow-Up: SMP + 256 KB L2 Cache + Zero-Copy FMan DMA + PowerPC Fixes (Verified)
+
+Following the initial bench analysis above, the following hardware and driver fixes were implemented and verified on `ld-branch` (OpenWrt 23.05.5, `linux-5.15.167` SMP):
+
+1. **Dual-Core SMP + 256 KB L2 Cache (`boot/smp` + `driver/radio_reset.c`):**
+   - Integrated the `boot/smp` pre-kernel shim (`boot/smp/shim.S`, `boot/smp/bootpg.S`) into `tools/repack_openwrt_image.py`, bringing up both 800 MHz `e500v2` cores (`smp: Brought up 1 node, 2 CPUs`, `160.00 BogoMIPS`) with the 256 KB L2 cache active (`L2CTL = 0x90000000`).
+   - Configured `/etc/rc.local` to pin PCIe radio IRQs (`17`, `18`) to `CPU0` and steer `phy0-ap0`/`phy1-ap0` RX softirqs to `CPU1` (`rps_cpus=2`).
+2. **Zero-Copy DMA in `driver/p1023_fman_im.c`:**
+   - Replaced the `dma_alloc_coherent` bounce buffers (`memcpy` on every RX and TX frame) with zero-copy `dma_map_single()` / `dma_unmap_single()` over `512` RX SKBs and `256` TX SKBs, plus `100 us` `hrtimer` NAPI polling and batched `QD_OFFSET_OUT` updates.
+   - Across `574,921` RX packets (`775.3 MiB`) and `206,596` TX packets (`211.9 MiB`)—including a `300 Mbits/sec` UDP flood—`eth0` recorded **0 RX errors (`rx_err=0`) and 0 TX drops (`tx_drop=0`)**, eliminating the previous 15.1% `eth0` tail-drop rate.
+3. **PowerPC Big-Endian VHT MCS & DMA Barrier Fixes (`driver/mwlwifi`):**
+   - Fixed the `(u32 *)` cast on the 16-bit `vht_cap.vht_mcs.rx_mcs_map` in `driver/mwlwifi/hif/fwcmd.c` (lines 2199 & 2287), restored `dma_wmb()` in `driver/mwlwifi/hif/pcie/8864/tx.c`, and restored the `MACREG_A2HRIC_BIT_MASK` IRQ toggle in `driver/mwlwifi/hif/pcie/pcie.c`.
+4. **2.4 GHz (`mwl8k`) MPIC Interrupts & `ap_tx_ampdu` Deadlock Guard (`driver/mwl8k/mwl8k.c`):**
+   - Mapped `pci1` (`a000:03:00.0`) MPIC interrupts in `dts/cisco-3702i.dts`, guarded `mwl8k_bss_info_changed_ap()` against redundant 6-second `mwl8k_fw_lock()` calls, and added `ap_tx_ampdu=0` (default) to avoid the 15-second `mwl8k_tx_wait_empty()` deadlock during AP BlockAck setup.
+
+### Verified `ld-branch` Benchmark Results (`wlp9s0` <-> `3702i` <-> `eth0`)
+- **5 GHz (`VHT80`):**
+  - 1-stream TCP DOWN: **201–244 Mbits/sec** (`248` sender, up from `31.9 Mbits/sec` — **7.6x**)
+  - 4-stream TCP DOWN: **202–243 Mbits/sec** (`258` sender, up from `70.9 Mbits/sec` — **3.4x**)
+  - 4-stream TCP UP: **166–185 Mbits/sec** (`204` sender, 0 retries, up from `44.0 Mbits/sec` — **4.2x**)
+  - UDP 300M DOWN: **216–252 Mbits/sec** (`0.049–0.072 ms` jitter, **0% dropped at `eth0`**)
+- **2.4 GHz (`HT20`):**
+  - 1-stream TCP DOWN: **6.08–10.5 Mbits/sec** (full 10s, 0 stalls)
+  - 4-stream TCP UP: **4.05–6.29 Mbits/sec** (full 10s, 0 retries)
+
+See [docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md](WIFI_PERFORMANCE_TESTING_AND_PLAN.md) for the full technical ceiling analysis (`VHT-MCS 4/5` / `-72 dBm` 5 GHz uplink RSSI attenuation and 2.4 GHz lockless `MWL8K_CMD_BASTREAM` plan).

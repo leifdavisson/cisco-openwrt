@@ -1,45 +1,44 @@
-# Cisco Aironet 3702i Standalone Conversion & Open-Source Integration
+# Cisco Aironet 3702i / 3602i OpenWrt Port
 
-This repository contains tools, configuration templates, and instructions for converting a **Cisco Aironet 3702i** (`AIR-CAP3702I-A-K9`, platform `ap3g2`) from controller-dependent **Lightweight (k9w8)** firmware into a **Standalone Autonomous (k9w7)** access point that integrates with home networks and [OpenWrt](https://openwrt.org/) gateways.
+Bootable OpenWrt port for the **Cisco Aironet AIR-CAP3702I** (and AIR-CAP3602I) enterprise wireless access points based on the **Freescale/NXP QorIQ P1020 / P1023** (`mpc85xx/p1020`, Dual-Core PowerPC `e500v2` @ 800 MHz).
+
+## Current Status (`ld-branch` — Verified on Hardware)
+
+| Subsystem | Hardware | Driver / Module | Status | Verified Performance / Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **SoC / SMP** | Freescale P1020/P1023 (2x e500v2 @ 800 MHz) | `boot/smp` pre-kernel stage + `mpc85xx_smp_defconfig` | **Working (2 CPUs)** | `smp: Brought up 1 node, 2 CPUs` (`160.00 BogoMIPS` total), 256 KB L2 cache enabled (`L2CTL=0x90000000`) |
+| **Wired Ethernet (`eth0`)** | DPAA FMan v2 Independent Mode (`dTSEC0` + BCM54616S RGMII) | `driver/p1023_fman_im.c` | **Working (Zero-Copy DMA)** | 1000Base-T Full Duplex; 512 RX / 256 TX zero-copy `dma_map_single()` rings; **0 RX errors, 0 TX drops** across 574,921 RX / 206,596 TX benchmark frames |
+| **5 GHz Radio (`phy0-ap0`)** | Marvell `88W8864` 4x4 802.11ac Wave 1 (`9000:01:00.0`) | `driver/mwlwifi` (`88W8864.bin`) | **Working (`VHT80`)** | **244 Mbits/sec** 1-stream TCP DOWN (`7.7x` over baseline), **243 Mbits/sec** 4-stream TCP DOWN, **185 Mbits/sec** 4-stream TCP UP, **252 Mbits/sec** UDP DOWN (`VHT-MCS 5`, `520 MBit/s` PHY) |
+| **2.4 GHz Radio (`phy1-ap0`)** | Marvell `88W8764` 4x4 802.11n (`a000:03:00.0`) | `driver/mwl8k` (`fmimage_8764_ap-1.fw`) | **Working (`HT20`)** | MPIC IRQs mapped; `ap_tx_ampdu=0` eliminates 15s `mwl8k_fw_lock()` TX-drain deadlock; **6.08–10.5 Mbits/sec** TCP DOWN, **4.05–6.29 Mbits/sec** TCP UP (0 stalls) |
+| **NOR Flash (`mtd0..mtd2`)** | 64 MiB Spansion/Numonyx CFI NOR (`0xec000000`) | `physmap-flash` + JFFS2 overlay | **Working** | Persistent `/overlay` (`rootfs_data`) + standalone `tools/repack_openwrt_image.py` |
+
+## Current Technical Ceiling & Remaining Roadblocks
+
+With both e500v2 CPU cores online, the 256 KB L2 cache active, RPS/IRQ steering configured, and `p1023_fman_im.c` upgraded to zero-copy `dma_map_single()` (`0%` `eth0` packet loss even under 300 Mbps UDP floods), **the SoC CPU and wired Ethernet are no longer the bottleneck**. We are now squarely up against two radio-layer hardware/firmware roadblocks:
+
+1. **5 GHz (`mwlwifi` 88W8864) Capped at `VHT-MCS 4/5` (`390–520 MBit/s` PHY -> `204–252 Mbits/sec` Goodput):**
+   - **What is failing:** Even with the client (`wlp9s0`) 1 meter from the AP (`-47 to -50 dBm` client RX RSSI), the AP reports the client's uplink signal at **`-72 dBm`** (~22 dB lower than expected) and caps downlink modulation at `VHT-MCS 4/5` (`390–520 MBit/s` instead of `VHT-MCS 8/9` `780–866.7 MBit/s`). Furthermore, seeing `-48 dBm` beacons from the AP causes client `iwlwifi` dynamic TPC to step down client TX power to `1.00 dBm` unless reset.
+   - **Root cause:** Missing Cisco per-unit 5 GHz RF calibration / power-limit tables (`Q5.bin` / `E5.bin` from `flash:` loaded via `CMD_SET_PWR_LIMIT` / `CMD_802_11_RF_ANTENNA`) and/or unconfigured external 5 GHz front-end module (FEM LNA/attenuator) GPIO lines.
+2. **2.4 GHz (`mwl8k` 88W8764) Capped at Legacy `MCS 1` (`13.0 MBit/s` PHY -> `6.08–10.5 Mbits/sec` Goodput):**
+   - **What is failing:** Enabling AP-mode TX A-MPDU (`ap_tx_ampdu=1`) allows `mwl8k` to negotiate `MCS 15` (`130 MBit/s`), but `mwl8k_ampdu_action(IEEE80211_AMPDU_TX_START)` -> `mwl8k_check_ba()` calls `mwl8k_fw_lock()`, which blocks for 15 seconds in `mwl8k_tx_wait_empty()` (`waiting for tx rings to drain (82 -> 20 pkts)`) while dropping all live traffic. Disabling `ap_tx_ampdu` (`ap_tx_ampdu=0`, default) prevents the deadlock, but the `fmimage_8764_ap-1.fw` firmware only uses `MCS 1` (`13.0 MBit/s`) for non-aggregated frames.
+   - **Root cause:** `mwl8k_check_ba()` / `mwl8k_create_ba()` (`MWL8K_CMD_BASTREAM`) uses `mwl8k_fw_lock()` (which waits for all data TX rings to empty while `mac80211` queues are stopped) instead of posting `MWL8K_CMD_BASTREAM` directly via `mwl8k_post_cmd()` without draining data rings.
+
+## Documentation Index
+
+- **[docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md](docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md)**: Complete root-cause analysis, verified before/after benchmark matrix, technical ceiling breakdown, and concrete troubleshooting steps to clear the remaining 5 GHz and 2.4 GHz roadblocks.
+- **[docs/WIFI_PERFORMANCE.md](docs/WIFI_PERFORMANCE.md)**: Detailed hardware/firmware investigation of the 3702i radio and Ethernet data path (Marco Mata + `ld-branch` follow-up).
+- **[docs/SMP.md](docs/SMP.md)**: Documentation for the pre-kernel `boot/smp` stage (`boot/smp/shim.S` and `boot/smp/bootpg.S`) that brings up CPU1 (`e500v2` core 1) and enables the 256 KB L2 cache after Cisco IOS ROMMON boots.
+- **[docs/LOWER_AI_EXECUTION_PLAN.md](docs/LOWER_AI_EXECUTION_PLAN.md)**: Step-by-step build, repack, TFTP RAM-boot, and troubleshooting playbook.
+- **[docs/DRIVER_DESIGN.md](docs/DRIVER_DESIGN.md)**: Architecture of the custom `p1023_fman_im.c` Freescale FMan v2 Independent Mode Ethernet driver and `radio_reset.c` CPLD/GPIO initialization module.
+- **[docs/FLASH_INSTALLATION.md](docs/FLASH_INSTALLATION.md)**: Instructions for persisting the OpenWrt image to NOR flash (`flash:`) for cold PoE boot.
 
 ## External Project References & Attribution
-- [OpenWrt Official Project](https://openwrt.org/)
-- [OpenWrt Table of Hardware (ToH)](https://openwrt.org/toh/start)
-- [Cisco Aironet 3700 Series Documentation](https://www.cisco.com/c/en/us/support/wireless/aironet-3700-series/series.html)
-- [pySerial Library](https://pyserial.readthedocs.io/)
 
-## Hardware Overview
-- **SoC:** Freescale QorIQ P1020 (PowerPC dual-core @ 800 MHz)
-- **Radios:** Marvell 88W8864 (5 GHz 802.11ac) & Marvell 88W8764 (2.4 GHz 802.11n)
-- **Architecture:** `mpc85xx` (e500v2)
-- **Console:** 9600 baud, 8N1 via `/dev/ttyUSB0`
-
-## Repository Files
-- [`tftp_server.py`](tftp_server.py): Zero-dependency Python TFTP server for serving the autonomous tar image.
-- [`serial_monitor.py`](serial_monitor.py): Interactive serial console utility for monitoring and configuring the AP.
-- [`ap_setup.cfg`](ap_setup.cfg): Production-ready standalone dual-band Wi-Fi configuration with WPA2-PSK and Web GUI.
-
-## Project Status (OpenWrt port — `ld-branch`)
-- **Working & Verified on Hardware:**
-  - **OpenWrt 23.05.5 (Linux 5.15.167)** boots from RAM or NOR flash (`flash:/openwrt-3702i.bin`, entry `0x01500000`).
-  - **Dual-Core SMP (`2 CPUs`, `160.00 BogoMIPS`) + 256 KB L2 Cache + `HID1[ABE]`:** Pre-kernel [`boot/smp`](boot/smp) stage releases Core 1 from `EEBPCR` boot hold-off into an ePAPR spin-table at `0x0ff00800`, enables `HID1[ABE|ASTME|MBDD]`, and turns on the P1020/P1023 256 KB L2 cache.
-  - **1 Gbps Wired Ethernet (`226.94 Mbps` single-core `wget`):** [`driver/p1023_fman_im.c`](driver/p1023_fman_im.c) (`RX_RING_SIZE=512`, `TX_RING_SIZE=256`, 100 µs NAPI timer) + `marvell.ko` bridged on `br-lan`, with RPS + IRQ affinity splitting Ethernet RX (`CPU1`) from Bridge + Wi-Fi TX (`CPU0`).
-  - **Dual-Band PCIe Wi-Fi Radios (AP Mode, SSID `OpenWRT`):**
-    - `radio0` (`phy0`, `9000:01:00.0`, `11ab:b050`): Marvell 88W8864 5 GHz 802.11ac (`VHT80`, channel 36) via `driver/mwlwifi/mwlwifi.ko` + `88W8864.bin` — **244 Mbits/sec** (1-stream TCP down), **243 Mbits/sec** (4-stream TCP down, 258 sender), **185 Mbits/sec** (4-stream TCP up, 204 sender), **252 Mbits/sec** (UDP down, `0.049 ms` jitter).
-    - `radio1` (`phy1`, `a000:03:00.0`, `11ab:b024`): Marvell 88W8764 2.4 GHz 802.11n (`HT20`, channel 6, MPIC IRQ `&mpic 0 2`) via [`driver/mwl8k/mwl8k.c`](driver/mwl8k/mwl8k.c) + `fmimage_8764_ap-1.fw` — **6.91–10.5 Mbits/sec** continuous (6s `fw_lock` stall fixed).
-  - **Flash Persistence (`/overlay`):** 4 MiB JFFS2 `rootfs_data` MTD partition (`0x03800000`–`0x03c00000` in [`dts/cisco-3702i.dts`](dts/cisco-3702i.dts)) mounted onto `/` via `overlayfs` + `pivot_root` in `/lib/preinit/75_mount_overlay`.
-- **Remaining Roadblocks / Next Actions:**
-  - **5 GHz `VHT-MCS 5` (`520 MBit/s`) RF/Rate Ceiling (~250 Mbps wall):** Audit `mwlwifi` `fixed_rate`/`ratetable` debugfs and Cisco per-unit RF calibration/power tables (`Q5.bin`/`E5.bin`) + FEM LNA/PA GPIOs so AP TX steps up to `VHT-MCS 8/9` (`780–866.7 MBit/s` → 400+ Mbps).
-  - **2.4 GHz `mwl8k` ADDBA TX-Ring Drain Deadlock:** Fix `waiting for tx rings to drain (82 -> 20 pkts)` in `mwl8k_fw_lock()` when `mwl8k_check_ba()` runs during `IEEE80211_AMPDU_TX_START`.
-  - **`p1023_fman_im.c` Zero-Copy DMA (`dma_map_single`):** Replace `rx_bufs`/`tx_bufs` bounce-buffer `memcpy()` with zero-copy `dma_map_single()` skb rings to eliminate the 15% UDP burst tail-drops on `eth0`.
-  - **Verify cold-reboot JFFS2 retention** across ROMMON `flashfs fsck`.
-- **Details:**
-  - [Open WIFI_PERFORMANCE_TESTING_AND_PLAN.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md)
-  - [Open WIFI_PERFORMANCE.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/WIFI_PERFORMANCE.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/WIFI_PERFORMANCE.md)
-  - [Open SMP.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/SMP.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/SMP.md)
-  - [Open OPENWRT_PORTING_LAB_NOTEBOOK.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/OPENWRT_PORTING_LAB_NOTEBOOK.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/OPENWRT_PORTING_LAB_NOTEBOOK.md)
-  - [Open LOWER_AI_EXECUTION_PLAN.md](file:///home/leifdavisson/projects/cisco-openwrt/docs/LOWER_AI_EXECUTION_PLAN.md) (file:///home/leifdavisson/projects/cisco-openwrt/docs/LOWER_AI_EXECUTION_PLAN.md)
-- **Upstream:** [OpenWrt](https://openwrt.org/), [mwlwifi](https://github.com/kaloz/mwlwifi), [Linux `mwl8k` firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/mwl8k).
+- **[OpenWrt Project](https://openwrt.org/)** — [Repository](https://github.com/openwrt/openwrt) | [mpc85xx Target Documentation](https://openwrt.org/docs/techref/targets/mpc85xx)
+- **[mwlwifi (Marvell 88W8864 mac80211 Driver)](https://github.com/kaloz/mwlwifi)** — Official upstream driver and firmware repository for Marvell 802.11ac chipsets.
+- **[Linux Kernel `mwl8k` Driver & Firmware](https://wireless.docs.kernel.org/en/latest/en/users/drivers/mwl8k.html)** — [linux-firmware `mwl8k` directory](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/mwl8k)
+- **[iperf3 Network Benchmark Tool](https://iperf.fr/)** — [ESnet iperf3 GitHub Repository](https://github.com/esnet/iperf)
 
 ## License
-Licensed under the [GNU Affero General Public License v3.0 (GNU AGPLv3)](LICENSE).
+
+Unless otherwise specified by upstream kernel/driver components (GPLv2), original scripts, documentation, and tooling in this repository are licensed under the **GNU Affero General Public License v3.0 (GNU AGPLv3)**.

@@ -201,8 +201,11 @@ struct p1023_priv {
 	struct fm_im_bd *tx_bd;
 	dma_addr_t tx_bd_dma;
 
-	u8 *rx_bufs;
-	dma_addr_t rx_bufs_dma;
+	struct sk_buff *rx_skbs[RX_RING_SIZE];
+	dma_addr_t rx_dma[RX_RING_SIZE];
+	struct sk_buff *tx_skbs[TX_RING_SIZE];
+	dma_addr_t tx_dma[TX_RING_SIZE];
+	u16 tx_dma_len[TX_RING_SIZE];
 	u8 *tx_bufs;
 	dma_addr_t tx_bufs_dma;
 
@@ -573,16 +576,52 @@ static void p1023_graceful_stop_ports(struct p1023_priv *priv)
 	}
 }
 
+static void p1023_free_ring_skbs(struct p1023_priv *priv)
+{
+	int i;
+
+	for (i = 0; i < RX_RING_SIZE; i++) {
+		if (priv->rx_skbs[i]) {
+			dma_unmap_single(&priv->pdev->dev, priv->rx_dma[i],
+					 PKT_BUF_SIZE, DMA_FROM_DEVICE);
+			dev_kfree_skb_any(priv->rx_skbs[i]);
+			priv->rx_skbs[i] = NULL;
+		}
+	}
+	for (i = 0; i < TX_RING_SIZE; i++) {
+		if (priv->tx_skbs[i]) {
+			dma_unmap_single(&priv->pdev->dev, priv->tx_dma[i],
+					 priv->tx_dma_len[i], DMA_TO_DEVICE);
+			dev_kfree_skb_any(priv->tx_skbs[i]);
+			priv->tx_skbs[i] = NULL;
+		}
+	}
+}
+
 static void p1023_setup_rings_and_pram(struct p1023_priv *priv)
 {
 	int i;
 
+	p1023_free_ring_skbs(priv);
 	memset(priv->rx_bd, 0, RX_RING_SIZE * sizeof(struct fm_im_bd));
 	memset(priv->tx_bd, 0, TX_RING_SIZE * sizeof(struct fm_im_bd));
 
 	for (i = 0; i < RX_RING_SIZE; i++) {
-		dma_addr_t bphys = priv->rx_bufs_dma + (i * PKT_BUF_SIZE);
+		struct sk_buff *skb = netdev_alloc_skb(priv->ndev, PKT_BUF_SIZE);
+		dma_addr_t bphys;
 
+		if (!skb) {
+			netdev_err(priv->ndev, "failed to alloc rx skb %d\n", i);
+			break;
+		}
+		bphys = dma_map_single(&priv->pdev->dev, skb->data,
+				       PKT_BUF_SIZE, DMA_FROM_DEVICE);
+		if (dma_mapping_error(&priv->pdev->dev, bphys)) {
+			dev_kfree_skb_any(skb);
+			break;
+		}
+		priv->rx_skbs[i] = skb;
+		priv->rx_dma[i] = bphys;
 		priv->rx_bd[i].buf_hi = 0;
 		priv->rx_bd[i].buf_lo = cpu_to_be32((u32)bphys);
 		priv->rx_bd[i].len = 0;
@@ -669,6 +708,14 @@ static void p1023_reclaim_tx(struct p1023_priv *priv)
 		if (status & TXBD_READY)
 			break;
 
+		if (priv->tx_skbs[priv->tx_dirty]) {
+			dma_unmap_single(&priv->pdev->dev,
+					 priv->tx_dma[priv->tx_dirty],
+					 priv->tx_dma_len[priv->tx_dirty],
+					 DMA_TO_DEVICE);
+			dev_consume_skb_any(priv->tx_skbs[priv->tx_dirty]);
+			priv->tx_skbs[priv->tx_dirty] = NULL;
+		}
 		bd->status = 0;
 		bd->len = 0;
 		priv->tx_dirty = (priv->tx_dirty + 1) % TX_RING_SIZE;
@@ -697,29 +744,40 @@ static int p1023_napi_poll(struct napi_struct *napi, int budget)
 		struct fm_im_bd *bd = &priv->rx_bd[priv->rx_idx];
 		u16 status = be16_to_cpu(READ_ONCE(bd->status));
 		u16 pkt_len;
-		u8 *buf;
+		struct sk_buff *skb = priv->rx_skbs[priv->rx_idx];
 
 		if (status & RXBD_EMPTY)
 			break;
 
 		rmb();
 		pkt_len = be16_to_cpu(READ_ONCE(bd->len));
-		buf = priv->rx_bufs + (priv->rx_idx * PKT_BUF_SIZE);
 
-		if ((status & RXBD_ERR_MASK) || !(status & RXBD_LAST) ||
+		if (!skb || (status & RXBD_ERR_MASK) || !(status & RXBD_LAST) ||
 		    pkt_len < 14 || pkt_len > PKT_BUF_SIZE) {
 			priv->rx_errors++;
 		} else {
-			struct sk_buff *skb;
+			struct sk_buff *new_skb = napi_alloc_skb(napi, PKT_BUF_SIZE);
+			dma_addr_t new_dma;
 
-			/* BMI RX0 fmbm_rfed=0x00040000 already stripped 4B FCS */
-			skb = napi_alloc_skb(napi, pkt_len);
-			if (skb) {
-				skb_put_data(skb, buf, pkt_len);
-				skb->protocol = eth_type_trans(skb, ndev);
-				napi_gro_receive(napi, skb);
-				priv->rx_packets++;
-				priv->rx_bytes += pkt_len;
+			if (new_skb) {
+				new_dma = dma_map_single(&priv->pdev->dev, new_skb->data,
+							 PKT_BUF_SIZE, DMA_FROM_DEVICE);
+				if (likely(!dma_mapping_error(&priv->pdev->dev, new_dma))) {
+					dma_unmap_single(&priv->pdev->dev, priv->rx_dma[priv->rx_idx],
+							 PKT_BUF_SIZE, DMA_FROM_DEVICE);
+					priv->rx_skbs[priv->rx_idx] = new_skb;
+					priv->rx_dma[priv->rx_idx] = new_dma;
+					bd->buf_lo = cpu_to_be32((u32)new_dma);
+
+					skb_put(skb, pkt_len);
+					skb->protocol = eth_type_trans(skb, ndev);
+					napi_gro_receive(napi, skb);
+					priv->rx_packets++;
+					priv->rx_bytes += pkt_len;
+				} else {
+					dev_kfree_skb_any(new_skb);
+					priv->rx_errors++;
+				}
 			} else {
 				priv->rx_errors++;
 			}
@@ -869,6 +927,7 @@ static int p1023_stop(struct net_device *ndev)
 	}
 
 	p1023_graceful_stop_ports(priv);
+	p1023_free_ring_skbs(priv);
 	return 0;
 }
 
@@ -879,7 +938,6 @@ static netdev_tx_t p1023_start_xmit(struct sk_buff *skb, struct net_device *ndev
 	struct fm_im_bd *bd;
 	u16 idx, next_idx;
 	u32 pkt_len;
-	u8 *tbuf;
 
 	if (skb->len > PKT_BUF_SIZE) {
 		dev_kfree_skb_any(skb);
@@ -887,54 +945,62 @@ static netdev_tx_t p1023_start_xmit(struct sk_buff *skb, struct net_device *ndev
 		return NETDEV_TX_OK;
 	}
 
-	spin_lock_irqsave(&priv->tx_lock, flags);
-	p1023_reclaim_tx(priv);
+	if (skb_padto(skb, ETH_ZLEN)) {
+		priv->tx_dropped++;
+		return NETDEV_TX_OK;
+	}
+	pkt_len = max_t(u16, skb->len, ETH_ZLEN);
 
-	idx = priv->tx_idx;
-	next_idx = (idx + 1) % TX_RING_SIZE;
+	{
+		dma_addr_t dma = dma_map_single(&priv->pdev->dev, skb->data,
+						pkt_len, DMA_TO_DEVICE);
+		if (dma_mapping_error(&priv->pdev->dev, dma)) {
+			dev_kfree_skb_any(skb);
+			priv->tx_dropped++;
+			return NETDEV_TX_OK;
+		}
 
-	if (next_idx == priv->tx_dirty ||
-	    (be16_to_cpu(READ_ONCE(priv->tx_bd[idx].status)) & TXBD_READY) ||
-	    (be16_to_cpu(READ_ONCE(priv->tx_bd[next_idx].status)) & TXBD_READY)) {
-		netif_stop_queue(ndev);
+		spin_lock_irqsave(&priv->tx_lock, flags);
+		p1023_reclaim_tx(priv);
+
+		idx = priv->tx_idx;
+		next_idx = (idx + 1) % TX_RING_SIZE;
+
+		if (next_idx == priv->tx_dirty ||
+		    (be16_to_cpu(READ_ONCE(priv->tx_bd[idx].status)) & TXBD_READY) ||
+		    (be16_to_cpu(READ_ONCE(priv->tx_bd[next_idx].status)) & TXBD_READY)) {
+			netif_stop_queue(ndev);
+			spin_unlock_irqrestore(&priv->tx_lock, flags);
+			dma_unmap_single(&priv->pdev->dev, dma, pkt_len, DMA_TO_DEVICE);
+			return NETDEV_TX_BUSY;
+		}
+
+		priv->tx_skbs[idx] = skb;
+		priv->tx_dma[idx] = dma;
+		priv->tx_dma_len[idx] = pkt_len;
+
+		bd = &priv->tx_bd[idx];
+		bd->buf_hi = 0;
+		bd->buf_lo = cpu_to_be32((u32)dma);
+		wmb();
+
+		/* Write status (READY | LAST) and length atomically as 32-bit word */
+		WRITE_ONCE(*(u32 *)bd, cpu_to_be32(((u32)(TXBD_READY | TXBD_LAST) << 16) | pkt_len));
+		wmb();
+
+		priv->tx_idx = next_idx;
+		iowrite16be(next_idx * sizeof(struct fm_im_bd),
+			    priv->tx_pram + IM_PRAM_TXQD + QD_OFFSET_IN);
+		mb();
+
+		priv->tx_packets++;
+		priv->tx_bytes += skb->len;
+
+		if (((next_idx + 1) % TX_RING_SIZE) == priv->tx_dirty)
+			netif_stop_queue(ndev);
+
 		spin_unlock_irqrestore(&priv->tx_lock, flags);
-		return NETDEV_TX_BUSY;
 	}
-
-	tbuf = priv->tx_bufs + (idx * PKT_BUF_SIZE);
-	pkt_len = skb->len;
-	if (skb_is_nonlinear(skb))
-		skb_copy_bits(skb, 0, tbuf, pkt_len);
-	else
-		skb_copy_from_linear_data(skb, tbuf, pkt_len);
-
-	if (pkt_len < ETH_ZLEN) {
-		memset(tbuf + pkt_len, 0, ETH_ZLEN - pkt_len);
-		pkt_len = ETH_ZLEN;
-	}
-
-	bd = &priv->tx_bd[idx];
-	bd->buf_hi = 0;
-	bd->buf_lo = cpu_to_be32((u32)(priv->tx_bufs_dma + (idx * PKT_BUF_SIZE)));
-	wmb();
-
-	/* Write status (READY | LAST) and length atomically as 32-bit word */
-	WRITE_ONCE(*(u32 *)bd, cpu_to_be32(((u32)(TXBD_READY | TXBD_LAST) << 16) | pkt_len));
-	wmb();
-
-	priv->tx_idx = next_idx;
-	iowrite16be(next_idx * sizeof(struct fm_im_bd),
-		    priv->tx_pram + IM_PRAM_TXQD + QD_OFFSET_IN);
-	mb();
-
-	priv->tx_packets++;
-	priv->tx_bytes += skb->len;
-
-	if (((next_idx + 1) % TX_RING_SIZE) == priv->tx_dirty)
-		netif_stop_queue(ndev);
-
-	spin_unlock_irqrestore(&priv->tx_lock, flags);
-	dev_kfree_skb_any(skb);
 	return NETDEV_TX_OK;
 }
 
@@ -1205,20 +1271,14 @@ static int __init p1023_fman_im_init(void)
 	if (ret)
 		goto err_unmap;
 
-	/* 3. Allocate DMA coherent rings & buffers */
+	/* 3. Allocate DMA coherent descriptor rings */
 	priv->rx_bd = dma_alloc_coherent(&pdev->dev,
 					 RX_RING_SIZE * sizeof(struct fm_im_bd),
 					 &priv->rx_bd_dma, GFP_KERNEL);
 	priv->tx_bd = dma_alloc_coherent(&pdev->dev,
 					 TX_RING_SIZE * sizeof(struct fm_im_bd),
 					 &priv->tx_bd_dma, GFP_KERNEL);
-	priv->rx_bufs = dma_alloc_coherent(&pdev->dev,
-					   RX_RING_SIZE * PKT_BUF_SIZE,
-					   &priv->rx_bufs_dma, GFP_KERNEL);
-	priv->tx_bufs = dma_alloc_coherent(&pdev->dev,
-					   TX_RING_SIZE * PKT_BUF_SIZE,
-					   &priv->tx_bufs_dma, GFP_KERNEL);
-	if (!priv->rx_bd || !priv->tx_bd || !priv->rx_bufs || !priv->tx_bufs) {
+	if (!priv->rx_bd || !priv->tx_bd) {
 		ret = -ENOMEM;
 		goto err_dma;
 	}
@@ -1254,12 +1314,6 @@ err_proc:
 	g_priv = NULL;
 	netif_napi_del(&priv->napi);
 err_dma:
-	if (priv->tx_bufs)
-		dma_free_coherent(&pdev->dev, TX_RING_SIZE * PKT_BUF_SIZE,
-				  priv->tx_bufs, priv->tx_bufs_dma);
-	if (priv->rx_bufs)
-		dma_free_coherent(&pdev->dev, RX_RING_SIZE * PKT_BUF_SIZE,
-				  priv->rx_bufs, priv->rx_bufs_dma);
 	if (priv->tx_bd)
 		dma_free_coherent(&pdev->dev, TX_RING_SIZE * sizeof(struct fm_im_bd),
 				  priv->tx_bd, priv->tx_bd_dma);
@@ -1295,10 +1349,7 @@ static void __exit p1023_fman_im_exit(void)
 	g_priv = NULL;
 	netif_napi_del(&priv->napi);
 
-	dma_free_coherent(&pdev->dev, TX_RING_SIZE * PKT_BUF_SIZE,
-			  priv->tx_bufs, priv->tx_bufs_dma);
-	dma_free_coherent(&pdev->dev, RX_RING_SIZE * PKT_BUF_SIZE,
-			  priv->rx_bufs, priv->rx_bufs_dma);
+	p1023_free_ring_skbs(priv);
 	dma_free_coherent(&pdev->dev, TX_RING_SIZE * sizeof(struct fm_im_bd),
 			  priv->tx_bd, priv->tx_bd_dma);
 	dma_free_coherent(&pdev->dev, RX_RING_SIZE * sizeof(struct fm_im_bd),
