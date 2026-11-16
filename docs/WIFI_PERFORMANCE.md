@@ -210,3 +210,17 @@ Following the initial bench analysis above, the following hardware and driver fi
   - 4-stream TCP UP: **4.05–6.29 Mbits/sec** (full 10s, 0 retries)
 
 See [docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md](WIFI_PERFORMANCE_TESTING_AND_PLAN.md) for the full technical ceiling analysis (`VHT-MCS 4/5` / `-72 dBm` 5 GHz uplink RSSI attenuation and 2.4 GHz lockless `MWL8K_CMD_BASTREAM` plan).
+
+
+---
+
+## 8. `ld-branch` Deep-Dive Update: Lockless 2.4 GHz A-MPDU, Cisco `flashfs` Extraction & 5 GHz SMP Pipeline
+
+1. **2.4 GHz (`mwl8k`) Lockless `MWL8K_CMD_BASTREAM` (`1e06e01`):**
+   - Bypassed `mwl8k_tx_wait_empty()` for `MWL8K_CMD_BASTREAM` inside `mwl8k_post_cmd()` (retaining `priv->fw_mutex` serialization) and enabled `ap_tx_ampdu = true` by default.
+   - Hardware verification confirmed BA stream creation completes in **82 ms** with zero TX-drain stalls, raising the 2.4 GHz PHY rate from `13.0 MBit/s MCS 1` to **`144.4 MBit/s MCS 15 short GI`** and 1-stream TCP DOWN to **`15.9 Mbits/sec`**.
+2. **Cisco `flashfs` Radio & Calibration Extraction (`tools/extract_cisco_flashfs.py`):**
+   - Extracted and SHA-512 verified 261 files from `backups/full_flash_64m.bin`, proving `8006.img` (`1.17 MB`) and `8004.img` (`1.19 MB`) are Cisco's proprietary ThreadX Split-MAC firmwares, while `B5.bin` (`134 KB`), `E5.bin` (`127 KB`), and `Q5.bin` (`342 KB`) are bzip2-compressed 16-bit signed dBm per-channel TX power tables.
+3. **5 GHz Single-Core Softirq Bottleneck Identified & SMP `tx_csd` Pipeline Built (`patches/mwlwifi-powerpc-fixes.patch`):**
+   - `/proc/stat` profiling at **`585.1 MBit/s VHT-MCS 6`** (`251 Mbits/sec` TCP DOWN) proved `mwlwifi` pinned `pcie_8864_tx_skbs()` (8 KB A-MSDU `memcpy` + `dma_map_single`) to the same core running `br-lan` + `mac80211` (`87–100%` softirq on one core while the second core sat `69–85%` idle).
+   - Implemented cross-CPU `smp_call_function_single_async(0, &pcie_priv->tx_csd)` + fast-path `ieee80211_free_txskb()` (63/64 frames) in `driver/mwlwifi/hif/pcie/8864/tx.c` and repacked `/home/leifdavisson/Downloads/openwrt-3702i.bin` with `eth0` `rps_cpus=2`.

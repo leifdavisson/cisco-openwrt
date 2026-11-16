@@ -1,99 +1,84 @@
-# Playbook: Cisco Aironet 3702i OpenWrt Build, Boot & Performance Troubleshooting (`ld-branch`)
+# Playbook: Cisco Aironet 3702i OpenWrt Build, Boot & Performance Verification (`ld-branch`)
 
-This document provides deterministic, copy-pasteable instructions for building, repacking, RAM-booting, and troubleshooting the **Cisco Aironet 3702i** OpenWrt image on `ld-branch`.
+This document provides deterministic, copy-pasteable instructions for building, repacking, RAM-booting, extracting Cisco `flashfs` calibration data, and benchmarking the **Cisco Aironet 3702i** on `ld-branch`.
 
 ---
 
 ## Global Rules & Safety Constraints
 
-1. **NEVER modify or disconnect `enp8s0` (`192.168.1.153`)**: It is the primary wired TFTP/management link to the lab switch. Always bind Wi-Fi `iperf3` client tests explicitly to `wlp9s0` (`-B 192.168.1.244`) targeting the wired namespace IP (`192.168.1.245`).
-2. **Serial Access**: Only one process may open `/dev/ttyUSB0` at `9600 8N1` at a time. Always use `python3 tools/serial_cmd.py "<cmd>"` for running commands on the AP console.
+1. **NEVER modify or disconnect `enp8s0` (`192.168.1.153`)**: It is the primary wired TFTP/management link to the lab switch. Always bind Wi-Fi `iperf3` client tests explicitly to `wlp9s0` (`-B 192.168.1.244`) targeting `192.168.1.245`.
+2. **NEVER passes `--timeout` to `tools/serial_cmd.py`**: `serial_cmd.py` forwards all CLI arguments directly to the remote BusyBox shell.
+3. **NEVER `rmmod mwlwifi` on a live AP without a full reboot + `radio_reset`**: `mwlwifi`'s `pcie_reset()` hangs the 88W8864 on the P1023 PCIe root complex unless GPIO 3 is pulsed by `radio_reset.ko`. Always test `mwlwifi.ko` changes via a clean PoE TFTP RAM-boot.
 
 ---
 
-## Completed Milestones (Steps 1–5 — Verified on Hardware)
+## Completed & Hardware-Verified Milestones
 
-- **Step 1 (Dual-Core SMP & L2 Cache — Verified in `ae76708`):**
-  - `tools/repack_openwrt_image.py` compiles `boot/smp/shim.S` and `boot/smp/bootpg.S` and places the SMP stage at image offset `0x6B0000` (runtime `0x01bb0000`), enabling the 256 KB L2 cache (`L2CTL = 0x90000000`) and releasing `CPU1` (`smp: Brought up 1 node, 2 CPUs`).
-- **Step 2 (Zero-Copy `p1023_fman_im.c` Ethernet Driver — Verified):**
-  - `driver/p1023_fman_im.c` uses zero-copy `dma_map_single()` / `dma_unmap_single()` over `rx_skbs[512]` and `tx_skbs[256]` with a `100 us` `hrtimer` NAPI poll. Verified **0 RX errors and 0 TX drops** across 574,921 RX and 206,596 TX benchmark packets.
-- **Step 3 (5 GHz `mwlwifi` Big-Endian VHT MCS & DMA Barrier Fixes — Verified in `758d106`):**
-  - Fixed the 32-bit pointer cast on `vht_cap.vht_mcs.rx_mcs_map` in `driver/mwlwifi/hif/fwcmd.c` and restored `dma_wmb()` in `driver/mwlwifi/hif/pcie/8864/tx.c`. Achieved **244 Mbits/sec** TCP DOWN and **252 Mbits/sec** UDP DOWN on 5 GHz `VHT80`.
-- **Step 4 (2.4 GHz `mwl8k` MPIC IRQs & `ap_tx_ampdu` Guard — Verified in `9d823f8`, `892a68f`):**
-  - Mapped `pci1` (`a000:03:00.0`) MPIC IRQs in `dts/cisco-3702i.dts` and added `ap_tx_ampdu=0` (default) in `driver/mwl8k/mwl8k.c` to prevent the 15-second `mwl8k_fw_lock()` TX-drain deadlock. Achieved stable **6.08–10.5 Mbits/sec** TCP DOWN on 2.4 GHz `HT20`.
-- **Step 5 (Self-Contained Image Repacker — Verified):**
-  - `python3 tools/repack_openwrt_image.py` compiles out-of-tree modules (`radio_reset.ko`, `p1023_fman_im.ko`, `mwlwifi.ko`, `mwl8k.ko`), injects `/etc/rc.local` IRQ/RPS tuning, builds the DTB and `boot/smp` shim, and outputs `/home/leifdavisson/Downloads/openwrt-3702i.bin`.
+- **Dual-Core SMP & 256 KB L2 Cache (`ae76708`):** Both 800 MHz `e500v2` cores online (`smp: Brought up 1 node, 2 CPUs`, `L2CTL = 0x90000000`).
+- **Zero-Copy `p1023_fman_im.c` Ethernet (`bee4dd0`):** 512 RX / 256 TX `dma_map_single()` rings; **0 RX errors, 0 TX drops** across 574,921 RX / 206,596 TX benchmark frames (`14%` `CPU0` softirq at 244 Mbps).
+- **2.4 GHz `mwl8k` Lockless `MWL8K_CMD_BASTREAM` (`1e06e01`):** `ap_tx_ampdu=true` enabled by default; BA stream creation in **82 ms**, **`144.4 MBit/s MCS 15 short GI`**, **15.9 Mbits/sec** TCP DOWN with 0 stalls.
+- **Cisco `flashfs` Calibration Extractor (`tools/extract_cisco_flashfs.py`):** Extracts and SHA-512 verifies all 261 Cisco `flashfs` files (`B5.bin`, `Q5.bin`, `E5.bin`, `8004.img`, `8006.img`, `triggerfish_cpld.img`) from `backups/full_flash_64m.bin`.
+- **5 GHz `mwlwifi` 2-Core SMP `tx_csd` Pipeline + Fast `free_txskb` (Built & Repacked in `~/Downloads/openwrt-3702i.bin`):** Splits `br-lan` + `mac80211` (`CPU1`, `eth0` `rps_cpus=2`) from `pcie_8864_tx_skbs` A-MSDU `memcpy` + `IRQ 17` (`CPU0`, via `smp_call_function_single_async`).
 
 ---
 
-## Standard Build, Repack & RAM-Boot Procedure
+## Next Step: Boot Repacked `openwrt-3702i.bin` & Benchmark 2-Core SMP Pipeline
 
-### 1. Compile Updated Kernel Modules & Repack `openwrt-3702i.bin`
+### 1. Repack Image (Already Built at `/home/leifdavisson/Downloads/openwrt-3702i.bin`)
+If you modify `driver/`, `driver/mwlwifi/`, `driver/mwl8k/`, or `dts/cisco-3702i.dts`:
 ```bash
-KDIR=/home/leifdavisson/projects/openwrt/build_dir/target-powerpc_8548_musl/linux-mpc85xx_p1020/linux-5.15.167
-CROSS=/home/leifdavisson/projects/openwrt/staging_dir/toolchain-powerpc_8548_gcc-12.3.0_musl/bin/powerpc-openwrt-linux-musl-
-export PATH="/home/leifdavisson/projects/openwrt/staging_dir/toolchain-powerpc_8548_gcc-12.3.0_musl/bin:$PATH"
-export STAGING_DIR="/home/leifdavisson/projects/openwrt/staging_dir"
-
-# Build p1023_fman_im.ko and radio_reset.ko
-make -C "$KDIR" ARCH=powerpc CROSS_COMPILE="$CROSS" M="$PWD/driver" modules
-
-# Build mwl8k.ko (if driver/mwl8k/mwl8k.c was modified)
-make -C "$KDIR" ARCH=powerpc CROSS_COMPILE="$CROSS" M="$PWD/driver/mwl8k" \
-  NOSTDINC_FLAGS="-I/home/leifdavisson/projects/openwrt/build_dir/target-powerpc_8548_musl/linux-mpc85xx_p1020/backports-6.1.110-1/backport-include -I/home/leifdavisson/projects/openwrt/build_dir/target-powerpc_8548_musl/linux-mpc85xx_p1020/backports-6.1.110-1/include -I/home/leifdavisson/projects/openwrt/build_dir/target-powerpc_8548_musl/linux-mpc85xx_p1020/backports-6.1.110-1/include/uapi -include backport/backport.h" \
-  KBUILD_MODPOST_WARN=1 modules
-cp driver/mwl8k/mwl8k.ko build/modules/mwl8k.ko
-
-# Repack ~/Downloads/openwrt-3702i.bin and copy to /srv/tftp/
+git -C driver/mwlwifi diff > patches/mwlwifi-powerpc-fixes.patch
 python3 tools/repack_openwrt_image.py
 ```
 
-### 2. Boot `openwrt-3702i.bin` Over TFTP via PoE Bounce
+### 2. PoE Power-Cycle & TFTP RAM-Boot
 ```bash
-python3 tools/powercycle_and_boot.py
-sleep 15
-python3 tools/serial_cmd.py "dmesg -n 1; dmesg | grep -E 'p1023|smp:'; ifconfig eth0; iwinfo"
+POE_SWITCH_PASS="<your_switch_password>" python3 tools/poe_bounce_to_rommon.py
+python3 - <<'EOF'
+import serial, time
+s = serial.Serial("/dev/ttyUSB0", 9600, timeout=0.5)
+def wait_for(token, timeout=45):
+    buf = ""
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        d = s.read(512).decode("latin1", errors="replace")
+        if d:
+            buf += d
+            print(d, end="", flush=True)
+            if token in buf:
+                return buf
+    return buf
+
+for cmd, tok, tmo in [
+    ("set IP_ADDR 192.168.1.243", "ap:", 10),
+    ("set NETMASK 255.255.255.0", "ap:", 10),
+    ("set DEFAULT_ROUTER 192.168.1.1", "ap:", 10),
+    ("ether_init", "ap:", 15),
+    ("tftp_init", "ap:", 15),
+    ("boot tftp://192.168.1.153/openwrt-3702i.bin", "procd: - init -", 150),
+]:
+    s.write((cmd + "\r\n").encode())
+    wait_for(tok, timeout=tmo)
+s.close()
+EOF
+sleep 18
+python3 tools/serial_cmd.py "dmesg -n 1; dmesg | grep -E 'smp:|p1023'; iwinfo"
 ```
 
----
-
-## Step 6 (Next): Clear 5 GHz `VHT-MCS 4/5` & `-72 dBm` Uplink RSSI Ceiling
-
-### Objective
-Determine why the 88W8864 AP reports client uplink RSSI at `-72 dBm` (when the client is 1 meter away and hears the AP at `-48 dBm`) and why downlink modulation caps at `VHT-MCS 4/5` (`390–520 MBit/s` PHY -> `201–252 Mbits/sec` goodput) instead of `VHT-MCS 8/9` (`780–866.7 MBit/s`).
-
-### Troubleshooting Commands
+### 3. Run 5 GHz & 2.4 GHz Benchmarks + Verify Dual-Core `/proc/stat` Balance
 ```bash
-# 1. Inspect mwlwifi debugfs state and test fixed_rate on phy0:
-python3 tools/serial_cmd.py "cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/info; cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/fixed_rate"
-
-# 2. Check client wlp9s0 txpower (reset if iwlwifi TPC dropped it to 1.00 dBm):
-nmcli connection up OpenWRT ifname wlp9s0
-iw dev wlp9s0 info
-iw dev wlp9s0 link
-
-# 3. Run 5 GHz iperf3 benchmark (ALWAYS bind to 192.168.1.244):
+# 5 GHz VHT80 Benchmark:
+nmcli dev wifi rescan ifname wlp9s0 && sleep 3
+nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid 64:DC:72:D0:FF:FF
+iw dev wlp9s0 set power_save off
+python3 tools/serial_cmd.py "grep '^cpu' /proc/stat"
 iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R
-```
+iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -P 4 -R
+iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -P 4
+python3 tools/serial_cmd.py "grep '^cpu' /proc/stat; iw dev phy0-ap0 station dump"
 
----
-
-## Step 7 (Next): Clear 2.4 GHz `mwl8k` `MWL8K_CMD_BASTREAM` Lockup & `MCS 1` Ceiling
-
-### Objective
-Enable 2.4 GHz TX A-MPDU (`MCS 15`, `130 MBit/s` HT20) without triggering the 15-second `mwl8k_fw_lock()` -> `mwl8k_tx_wait_empty()` deadlock.
-
-### Troubleshooting Commands
-```bash
-# 1. Test current 2.4 GHz stability with ap_tx_ampdu=0 (default):
-nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid 64:DC:72:D0:00:00
-iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R
-
-# 2. After refactoring mwl8k_check_ba() in driver/mwl8k/mwl8k.c to post MWL8K_CMD_BASTREAM
-#    without calling mwl8k_tx_wait_empty(), enable ap_tx_ampdu at runtime and re-test:
-python3 tools/serial_cmd.py "echo 1 > /sys/module/mwl8k/parameters/ap_tx_ampdu"
-iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R
-python3 tools/serial_cmd.py "iw dev phy1-ap0 station dump"
+# Extract Cisco flashfs radio power tables if needed:
+python3 tools/extract_cisco_flashfs.py --decompress --outdir /tmp/cisco_cal
 ```
 
 ---

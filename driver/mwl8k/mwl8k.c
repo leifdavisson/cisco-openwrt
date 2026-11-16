@@ -1897,9 +1897,9 @@ static inline void mwl8k_tx_count_packet(struct ieee80211_sta *sta, u8 tid)
  */
 #define BA_QUEUE		5
 
-static bool ap_tx_ampdu;
+static bool ap_tx_ampdu = true;
 module_param(ap_tx_ampdu, bool, 0644);
-MODULE_PARM_DESC(ap_tx_ampdu, "Enable AP-mode TX A-MPDU aggregation (default: false)");
+MODULE_PARM_DESC(ap_tx_ampdu, "Enable AP-mode TX A-MPDU aggregation (default: true)");
 
 static void
 mwl8k_txq_xmit(struct ieee80211_hw *hw,

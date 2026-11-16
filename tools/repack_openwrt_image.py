@@ -264,7 +264,7 @@ insmod /lib/modules/5.15.167/mwlwifi.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mwl8k.ko 2>/dev/null || true
 echo 1 > /proc/irq/17/smp_affinity 2>/dev/null || true
 echo 1 > /proc/irq/18/smp_affinity 2>/dev/null || true
-echo 1 > /sys/class/net/eth0/queues/rx-0/rps_cpus 2>/dev/null || true
+echo 2 > /sys/class/net/eth0/queues/rx-0/rps_cpus 2>/dev/null || true
 (sleep 5; wifi up; sleep 5; echo 2 > /sys/class/net/phy0-ap0/queues/rx-0/rps_cpus 2>/dev/null; echo 2 > /sys/class/net/phy1-ap0/queues/rx-0/rps_cpus 2>/dev/null) >/dev/null 2>&1 &
 exit 0
 """

@@ -388,7 +388,7 @@ index 8d54bc3..4f78231 100644
  struct channel_power_tbl_sc4 {
  	u8 channel;
 diff --git a/hif/pcie/8864/tx.c b/hif/pcie/8864/tx.c
-index 05b6021..dd66a3f 100644
+index 05b6021..93138fd 100644
 --- a/hif/pcie/8864/tx.c
 +++ b/hif/pcie/8864/tx.c
 @@ -291,12 +291,8 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
@@ -405,7 +405,58 @@ index 05b6021..dd66a3f 100644
  	pcie_priv->desc_data[desc_num].pnext_tx_hndl = tx_hndl->pnext;
  	pcie_priv->fw_desc_cnt[desc_num]++;
  }
-@@ -478,7 +474,11 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
+@@ -408,6 +404,24 @@ struct sk_buff *pcie_tx_do_amsdu(struct mwl_priv *priv,
+ 	return NULL;
+ }
+ 
++static void pcie_8864_tx_csd_func(void *info)
++{
++	struct pcie_priv *pcie_priv = info;
++
++	atomic_set(&pcie_priv->tx_csd_pending, 0);
++	tasklet_schedule(&pcie_priv->tx_task);
++}
++
++static inline void pcie_8864_schedule_tx(struct pcie_priv *pcie_priv)
++{
++	if (raw_smp_processor_id() != 0 && cpu_online(0)) {
++		if (atomic_cmpxchg(&pcie_priv->tx_csd_pending, 0, 1) == 0)
++			smp_call_function_single_async(0, &pcie_priv->tx_csd);
++	} else {
++		tasklet_schedule(&pcie_priv->tx_task);
++	}
++}
++
+ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
+ {
+ 	struct pcie_priv *pcie_priv = priv->hif.priv;
+@@ -454,6 +468,17 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
+ 			tx_hndl->psk_buff = NULL;
+ 			wmb(); /*Data Memory Barrier*/
+ 
++			info = IEEE80211_SKB_CB(done_skb);
++			if (((struct pcie_tx_ctrl *)info->driver_data)->type ==
++			    IEEE_TYPE_DATA &&
++			    !(info->flags & (IEEE80211_TX_CTL_REQ_TX_STATUS |
++					     IEEE80211_TX_INTFL_NL80211_FRAME_TX)) &&
++			    !(priv->hw->conf.flags & IEEE80211_CONF_MONITOR) &&
++			    (++pcie_priv->tx_done_sample & 0x3f) != 0) {
++				ieee80211_free_txskb(priv->hw, done_skb);
++				goto next;
++			}
++
+ 			dma_data = (struct pcie_dma_data *)done_skb->data;
+ 			wh = &dma_data->wh;
+ 			if (ieee80211_is_nullfunc(wh->frame_control) ||
+@@ -462,7 +487,6 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
+ 				goto next;
+ 			}
+ 
+-			info = IEEE80211_SKB_CB(done_skb);
+ 			if (ieee80211_is_data(wh->frame_control) ||
+ 			    ieee80211_is_data_qos(wh->frame_control))
+ 				pcie_tx_prepare_info(priv, rate, info);
+@@ -478,7 +502,11 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
  			} else
  				memmove(dma_data->data - hdrlen, &dma_data->wh, hdrlen);
  			skb_pull(done_skb, sizeof(*dma_data) - hdrlen);
@@ -417,7 +468,23 @@ index 05b6021..dd66a3f 100644
  next:
  			tx_hndl = tx_hndl->pnext;
  			tx_desc = tx_hndl->pdesc;
-@@ -545,6 +545,8 @@ void pcie_8864_tx_skbs(unsigned long data)
+@@ -495,10 +523,15 @@ next:
+ int pcie_8864_tx_init(struct ieee80211_hw *hw)
+ {
+ 	struct mwl_priv *priv = hw->priv;
++	struct pcie_priv *pcie_priv = priv->hif.priv;
+ 	struct sk_buff skb;
+ 	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(&skb);
+ 	int rc;
+ 
++	INIT_CSD(&pcie_priv->tx_csd, pcie_8864_tx_csd_func, pcie_priv);
++	atomic_set(&pcie_priv->tx_csd_pending, 0);
++	pcie_priv->tx_done_sample = 0;
++
+ 	if (sizeof(struct pcie_tx_ctrl) >
+ 	    sizeof(tx_info->driver_data)) {
+ 		wiphy_err(hw->wiphy, "driver data is not enough: %zu (%zu)\n",
+@@ -545,6 +578,8 @@ void pcie_8864_tx_skbs(unsigned long data)
  
  	spin_lock_bh(&pcie_priv->tx_desc_lock);
  	while (num--) {
@@ -426,7 +493,7 @@ index 05b6021..dd66a3f 100644
  		while (true) {
  			struct ieee80211_tx_info *tx_info;
  			struct pcie_tx_ctrl *tx_ctrl;
-@@ -555,6 +557,7 @@ void pcie_8864_tx_skbs(unsigned long data)
+@@ -555,6 +590,7 @@ void pcie_8864_tx_skbs(unsigned long data)
  			tx_skb = skb_dequeue(&pcie_priv->txq[num]);
  			if (!tx_skb)
  				break;
@@ -434,7 +501,7 @@ index 05b6021..dd66a3f 100644
  
  			tx_info = IEEE80211_SKB_CB(tx_skb);
  			tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
-@@ -564,9 +567,10 @@ void pcie_8864_tx_skbs(unsigned long data)
+@@ -564,9 +600,10 @@ void pcie_8864_tx_skbs(unsigned long data)
  							  tx_skb, tx_info);
  
  			if (tx_skb) {
@@ -447,7 +514,7 @@ index 05b6021..dd66a3f 100644
  					skb_queue_head(&pcie_priv->txq[num],
  						       tx_skb);
  			}
-@@ -577,9 +581,10 @@ void pcie_8864_tx_skbs(unsigned long data)
+@@ -577,9 +614,10 @@ void pcie_8864_tx_skbs(unsigned long data)
  			spin_lock_bh(&sta_info->amsdu_lock);
  			amsdu_frag = &sta_info->amsdu_ctrl.frag[num];
  			if (amsdu_frag->num) {
@@ -460,7 +527,7 @@ index 05b6021..dd66a3f 100644
  					skb_queue_head(&pcie_priv->txq[num],
  						       amsdu_frag->skb);
  				amsdu_frag->num = 0;
-@@ -588,6 +593,13 @@ void pcie_8864_tx_skbs(unsigned long data)
+@@ -588,6 +626,13 @@ void pcie_8864_tx_skbs(unsigned long data)
  		}
  		spin_unlock_bh(&priv->sta_lock);
  
@@ -474,7 +541,7 @@ index 05b6021..dd66a3f 100644
  		if (skb_queue_len(&pcie_priv->txq[num]) <
  		    pcie_priv->txq_wake_threshold) {
  			int queue;
-@@ -730,7 +742,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
+@@ -730,7 +775,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
  	index = SYSADPT_TX_WMM_QUEUES - index - 1;
  	txpriority = index;
  
@@ -483,6 +550,15 @@ index 05b6021..dd66a3f 100644
  	  !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
  	    ieee80211_is_data_qos(wh->frame_control)) {
  		tid = qos & 0xf;
+@@ -805,7 +850,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
+ 
+ 	skb_queue_tail(&pcie_priv->txq[index], skb);
+ 
+-	tasklet_schedule(&pcie_priv->tx_task);
++	pcie_8864_schedule_tx(pcie_priv);
+ 
+ 	/* Initiate the ampdu session here */
+ 	if (start_ba_session) {
 diff --git a/hif/pcie/8964/tx_ndp.c b/hif/pcie/8964/tx_ndp.c
 index 9e9845b..bb86cd3 100644
 --- a/hif/pcie/8964/tx_ndp.c
@@ -574,10 +650,18 @@ index fd997c5..a55cc82 100644
  	    ieee80211_is_data_qos(wh->frame_control)) {
  		tid = qos & 0xf;
 diff --git a/hif/pcie/dev.h b/hif/pcie/dev.h
-index f7173e0..c73bc08 100644
+index f7173e0..1866dcf 100644
 --- a/hif/pcie/dev.h
 +++ b/hif/pcie/dev.h
-@@ -33,11 +33,11 @@
+@@ -24,6 +24,7 @@
+ #include <linux/firmware.h>
+ #include <linux/delay.h>
+ #include <linux/bitops.h>
++#include <linux/smp.h>
+ #include <net/mac80211.h>
+ 
+ #define PCIE_DRV_NAME    KBUILD_MODNAME
+@@ -33,11 +34,11 @@
  #define PCIE_MIN_TX_HEADROOM_KF2  96
  #define PCIE_NUM_OF_DESC_DATA     SYSADPT_TOTAL_TX_QUEUES
  #define PCIE_AMPDU_QUEUES         4
@@ -592,6 +676,16 @@ index f7173e0..c73bc08 100644
  
  enum {
  	IEEE_TYPE_MANAGEMENT = 0,
+@@ -582,6 +583,9 @@ struct pcie_priv {
+ 	spinlock_t int_mask_lock ____cacheline_aligned_in_smp;
+ 	struct tasklet_struct tx_task;
+ 	struct tasklet_struct tx_done_task;
++	call_single_data_t tx_csd;
++	atomic_t tx_csd_pending;
++	unsigned int tx_done_sample;
+ 	/* NAPI */
+ 	struct net_device napi_dev;
+ 	struct napi_struct napi;
 diff --git a/hif/pcie/fwdl.c b/hif/pcie/fwdl.c
 index 939ed54..2133b4e 100644
 --- a/hif/pcie/fwdl.c

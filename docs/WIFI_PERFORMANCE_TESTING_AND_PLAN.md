@@ -1,102 +1,81 @@
-# Cisco Aironet 3702i Wi-Fi & Ethernet Performance: Status, Ceiling Analysis & Next Steps
+# Cisco Aironet 3702i Wi-Fi & Ethernet Performance: Verified Findings, SMP Pipeline & Next Steps
 
-## 1. Executive Summary & Benchmark Progression
+## 1. Verified Hardware Benchmark Matrix (`ld-branch`)
 
-Across commits `9d823f8`, `6208d58`, `758d106`, `ae76708`, `892a68f`, and our zero-copy `p1023_fman_im.c` DMA upgrade on `ld-branch`, we systematically eliminated the CPU, cache, interrupt, Big-Endian DMA, and Ethernet bounce-buffer bottlenecks on the **Cisco Aironet 3702i** (`Freescale P1020/P1023`, dual-core `e500v2` @ 800 MHz, OpenWrt 23.05.5 `linux-5.15.167`).
-
-### Verified Hardware Benchmark Progression (`wlp9s0` <-> `phy0-ap0`/`phy1-ap0` <-> `br-lan` <-> `eth0`)
-
-| Test Case | Initial Baseline (`UP`, No L2, Broken BE/DMA) | After L2 Cache + BE/DMA + FMan Ring=512 (`758d106`) | After Dual-Core SMP + RPS + `ap_tx_ampdu=0` (`892a68f`) | After Zero-Copy FMan DMA (`p1023_fman_im.c`) | Total Gain vs. Baseline |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **5 GHz (`VHT80`) 1-Stream TCP DOWN** | `31.9 Mbits/sec` (1154 retries) | `124 Mbits/sec` (0 retries) | **244 Mbits/sec** (`248` sender, 5 retries @ `VHT-MCS 5`) | **201–244 Mbits/sec** (`201` @ `MCS 4`, `244` @ `MCS 5`) | **7.6x** |
-| **5 GHz (`VHT80`) 4-Stream TCP DOWN** | `70.9 Mbits/sec` | `126 Mbits/sec` | **243 Mbits/sec** (`258` sender @ `VHT-MCS 5`) | **202–243 Mbits/sec** (`202` @ `MCS 4`, `243` @ `MCS 5`) | **3.4x** |
-| **5 GHz (`VHT80`) 4-Stream TCP UP** | `44.0 Mbits/sec` | `97.9 Mbits/sec` (0 retries) | **185 Mbits/sec** (`204` sender, 0 retries) | **166–185 Mbits/sec** (`176` sender, 0 retries) | **4.2x** |
-| **5 GHz (`VHT80`) UDP 300M DOWN** | `141 Mbits/sec` (`0.227 ms` jitter) | `152 Mbits/sec` (`0.097 ms` jitter) | **252 Mbits/sec** (`0.049 ms` jitter, 15% drop at `eth0`) | **216–252 Mbits/sec** (**0% drop at `eth0`**, `rx_err=0`, `tx_drop=0`) | **1.8x** |
-| **2.4 GHz (`HT20`) 1-Stream TCP DOWN** | `0.00 Mbits/sec` (IRQ dead / 15s BA stall) | `12.6 Mbits/sec` (4s burst, then 15s stall) | **6.08–10.5 Mbits/sec** (full 10s, 0 stalls) | **6.08–10.5 Mbits/sec** (full 10s, 0 stalls) | **Fixed (0 -> 10.5 Mbps)** |
-| **2.4 GHz (`HT20`) 4-Stream TCP UP** | `0.00 Mbits/sec` (IRQ dead / 15s BA stall) | `0.00 Mbits/sec` (stalled in `mwl8k_fw_lock`) | **4.05–6.29 Mbits/sec** (full 10s, 0 retries) | **4.05–6.29 Mbits/sec** (full 10s, 0 retries) | **Fixed (0 -> 6.29 Mbps)** |
-| **`eth0` Hardware / Driver Drops (300M UDP)** | High ring exhaustion (`RX_RING=64`) | `19,337 / 128,053` (**15.1%** dropped at `eth0`) | `19,337 / 128,053` (**15.1%** dropped at `eth0`) | **0 driver drops / 0 RX errors** across `574,921` RX & `206,596` TX pkts | **Eliminated (15.1% -> 0%)** |
+| Test Case (`wlp9s0` <-> `3702i` <-> `eth0`) | Initial Baseline (`UP`, No L2, Broken BE/DMA) | After L2 + BE/DMA + FMan Ring=512 (`758d106`) | After 2-CPU SMP + Zero-Copy FMan + IRQ/RPS Split (`1e06e01`) | Total Gain vs. Baseline |
+| :--- | :--- | :--- | :--- | :--- |
+| **5 GHz (`VHT80`) 1-Stream TCP DOWN** | `31.9 Mbits/sec` (1154 retries) | `124 Mbits/sec` (0 retries) | **251 Mbits/sec** sender / **247 Mbits/sec** receiver (`VHT-MCS 5/6`, `520–585.1 MBit/s`) | **7.9x** |
+| **5 GHz (`VHT80`) 4-Stream TCP DOWN** | `70.9 Mbits/sec` | `126 Mbits/sec` | **243 Mbits/sec** (`258` sender) | **3.4x** |
+| **5 GHz (`VHT80`) 4-Stream TCP UP** | `44.0 Mbits/sec` | `97.9 Mbits/sec` (0 retries) | **185 Mbits/sec** (`204` sender, 0 retries) | **4.2x** |
+| **5 GHz (`VHT80`) UDP 300M DOWN** | `141 Mbits/sec` (`0.227 ms` jitter) | `152 Mbits/sec` (`0.097 ms` jitter) | **252 Mbits/sec** (`0.049 ms` jitter, **0% dropped at `eth0`**) | **1.8x** |
+| **2.4 GHz (`HT20`) 1-Stream TCP DOWN** | `0.00 Mbits/sec` (IRQ dead / 15s stall) | `12.6 Mbits/sec` (4s burst, then 15s stall) | **15.9 Mbits/sec** sender / **15.3 Mbits/sec** receiver (`144.4 MBit/s MCS 15 SGI`, 0 stalls) | **Fixed (0 -> 15.9 Mbps)** |
+| **2.4 GHz (`HT20`) 4-Stream TCP UP** | `0.00 Mbits/sec` (IRQ dead / 15s stall) | `0.00 Mbits/sec` (stalled in `mwl8k_fw_lock`) | **4.05–6.29 Mbits/sec** (0 retries, 0 stalls) | **Fixed (0 -> 6.29 Mbps)** |
+| **`eth0` Driver Drops (`p1023_fman_im.c`)** | High ring exhaustion (`RX_RING=64`) | `19,337 / 128,053` (**15.1%** dropped at `eth0`) | **0 RX errors / 0 TX drops** across `574,921` RX & `206,596` TX pkts | **Eliminated (15.1% -> 0%)** |
 
 ---
 
-## 2. Completed Architectural Fixes (`ld-branch`)
+## 2. Newly Verified Breakthroughs
 
-1. **Dual-Core SMP (`boot/smp` Stage in `tools/repack_openwrt_image.py` — Commit `ae76708`):**
-   - Cisco's IOS ROMMON leaves CPU1 (`e500v2` core 1) held in reset (`EEBPCR = 0x00000001`) and leaves the 256 KB L2 cache disabled (`L2CTL = 0x00000000`), while jumping to the ELF entry with only a 64 MiB TLB1 CAM (`MAS2=0, MAS3=0x00000015`).
-   - Integrated Marco Mata's (`origin/fix/openwrt25-load-address`) pre-kernel `boot/smp` stage (`boot/smp/shim.S`, `boot/smp/bootpg.S`) at image offset `0x6B0000` (runtime `0x01bb0000`) with `/memreserve/ 0x0ff00000 0x00001000` and `cpu-release-addr = <0x0 0x0ff00800>` in `dts/cisco-3702i.dts`.
-   - Verified both 800 MHz cores online (`smp: Brought up 1 node, 2 CPUs`, `160.00 BogoMIPS`) and configured `/etc/rc.local` to pin `mwlwifi`/`mwl8k` PCIe IRQs (`17`, `18`) to `CPU0` (`smp_affinity=1`) and steer `phy0-ap0`/`phy1-ap0` RX softirqs to `CPU1` (`rps_cpus=2`).
-2. **256 KB L2 Cache Activation (`driver/radio_reset.c` & `boot/smp/shim.S` — Commit `6208d58`):**
-   - Enabled and invalidated the 256 KB L2 cache (`L2CTL = 0x90000000`), cutting per-packet softirq overhead in half.
-3. **Zero-Copy DMA in `driver/p1023_fman_im.c`:**
-   - Replaced the `dma_alloc_coherent` bounce buffers (`rx_bufs` / `tx_bufs` requiring a full-frame `memcpy` on every RX and TX packet) with zero-copy `dma_map_single()` / `dma_unmap_single()` over `rx_skbs[512]` and `tx_skbs[256]`, paired with `100 us` `hrtimer` NAPI polling and batched `QD_OFFSET_OUT` doorbell updates every 8 descriptors.
-   - Verified on hardware: across `574,921` RX packets (`775.3 MiB`) and `206,596` TX packets (`211.9 MiB`)—including a `300 Mbits/sec` UDP flood of `259,138` packets—`p1023_fman_im` recorded **`rx_err=0` and `tx_drop=0`**, delivering `573,624` packets directly to `phy0-ap0` with `0` netdev drops.
-4. **PowerPC Big-Endian & DMA Ordering Fixes in `driver/mwlwifi` (`patches/mwlwifi-powerpc-fixes.patch` — Commit `758d106`):**
-   - Fixed the 32-bit `(u32 *)` pointer dereference on the 16-bit `vht_cap.vht_mcs.rx_mcs_map` field in `driver/mwlwifi/hif/fwcmd.c` (lines 2199 & 2287), which on Big-Endian PowerPC shifted the VHT RX MCS map into the upper 16 bits and fed garbage (`tx_mcs_map`) to the 88W8864 firmware's rate adaptation engine.
-   - Restored `dma_wmb()` before `NEXT_TXD` assignment in `driver/mwlwifi/hif/pcie/8864/tx.c` and restored the `MACREG_A2HRIC_BIT_MASK` IRQ re-arm toggle in `driver/mwlwifi/hif/pcie/pcie.c`.
-5. **2.4 GHz `mwl8k` MPIC Interrupt Mapping & `ap_tx_ampdu` Deadlock Guard (`commits 9d823f8, 6208d58, 892a68f`):**
-   - Added the missing `interrupt-map` entries (`&mpic 0 2 / 1 2 / 2 2 / 3 2`) under `pci1: pcie@a000` in `dts/cisco-3702i.dts` so `mwl8k` (`a000:03:00.0`) receives IRQ 18 (`MWL8K_CMD_SET_AID` no longer times out).
-   - Guarded `mwl8k_bss_info_changed_ap()` against calling `mwl8k_fw_lock()` every 6 seconds when no ERP/HT parameters changed.
-   - Added module parameter `ap_tx_ampdu` (default `false`) in `driver/mwl8k/mwl8k.c` to prevent AP-mode TX A-MPDU initiation from triggering the 15-second `mwl8k_fw_lock()` -> `mwl8k_tx_wait_empty()` deadlock.
+### A. 2.4 GHz (`mwl8k`) Lockless `MWL8K_CMD_BASTREAM` (`1e06e01`) — Verified on Hardware
+- **Fix:** Updated `mwl8k_post_cmd()` in `driver/mwl8k/mwl8k.c` so `MWL8K_CMD_BASTREAM` serializes on `priv->fw_mutex` **without** calling `mwl8k_fw_lock()` / `mwl8k_tx_wait_empty()`, and flipped `ap_tx_ampdu = true` by default.
+- **Hardware Verification:**
+  - `dmesg` confirmed `Added a new stream` $\rightarrow$ `Started stream` $\rightarrow$ `Created a BA stream for ... : tid 0` completed in **82 ms** (`2847.567s` $\rightarrow$ `2847.650s`) with zero `waiting for tx rings to drain` messages and clean teardown (`Deleted BA stream index 0`).
+  - `iw dev wlp9s0 link` confirmed 2.4 GHz PHY rate stepped up from `13.0 MBit/s MCS 1` to **`144.4 MBit/s MCS 15 short GI`**, raising 1-stream TCP DOWN from `6.08–10.5 Mbits/sec` to **`15.9 Mbits/sec`** across a full 10s run with 0 stalls.
 
----
+### B. Exact Root Cause of the ~250 Mbits/sec 5 GHz Ceiling (`/proc/stat` + `ratetable` Proof)
+1. **Decoded Live 88W8864 Firmware Rate Table (`ratetable`):**
+   - Writing `echo 1 > /sys/kernel/debug/ieee80211/phy0/mwlwifi/ratetable` dumped all 19 sorted rate entries (`idx 0..18`) for AID 1, confirming the firmware rate table includes `2SS VHT-MCS 4` (`idx 8,9`), `MCS 5` (`idx 10,11`), `MCS 6` (`idx 12,13`), `MCS 7` (`idx 14,15`), `MCS 8` (`idx 16,17`), and `MCS 9` (`idx 18`, `866.7 MBit/s`), and confirming `ampdu: true` + `amsdu: true` (`8K` A-MSDU).
+   - Stepping the link up to **`585.1 MBit/s VHT-MCS 6 80MHz short GI VHT-NSS 2`** (`fixed_rate = 0x0e / 0x10`, and naturally via rate adaptation once IRQs were split) still plateaued at **`230–251 Mbits/sec`** TCP!
+2. **Measured Per-Core `/proc/stat` Utilization During 5 GHz `iperf3`:**
+   - With `eth0` `rps_cpus=1` (default): `CPU0` hit **100% softirq (`498 / 500` ticks)** while `CPU1` sat **85% idle (`77` softirq ticks)**.
+   - With `eth0` `rps_cpus=2` and `IRQ 17` on `CPU0`: `CPU0` (`eth0` zero-copy NAPI + `IRQ 17`) used **only 31% softirq (`261` ticks, 69% idle)**, while `CPU1` (`br-lan` + `mac80211` + `mwlwifi` `tx_task`) hit **87–97.5% softirq (`741–780` ticks)** and reached **251 Mbits/sec** sender (**247 Mbits/sec** receiver).
+   - **Why `mwlwifi` Saturated One Core:** In `driver/mwlwifi/hif/pcie/8864/tx.c`, `pcie_8864_tx_xmit()` called `tasklet_schedule(&pcie_priv->tx_task)` on the current CPU (`CPU1`), forcing `pcie_8864_tx_skbs()` (8 KB A-MSDU allocation + full-packet `memcpy` + `dma_map_single` cache flush) onto the exact same core already running `br-lan` and `mac80211`. Meanwhile, `pcie_non_pfu_tx_done()` pulled every completed SKB's cold DDR3 header back into L1 cache for `memmove()` + `ieee80211_tx_status()` (`sta_info_get_by_addrs()` RCU hash lookup).
 
-## 3. Technical Ceiling Analysis: What Is Failing & Remaining Architectural Roadblocks
-
-Now that `eth0` drops **0%** of frames at 300 Mbps (`rx_err=0, tx_drop=0`) and `CPU1` has >60% idle headroom during peak Wi-Fi transfers, **the host CPU and wired Ethernet are proven not to be the bottleneck**. Our throughput ceiling is now strictly dictated by the PHY rates selected by the two Marvell radio firmwares:
-
-### Roadblock A: 5 GHz (`mwlwifi` 88W8864) Stuck at `VHT-MCS 4/5` (`390–520 MBit/s` PHY) & `-72 dBm` Uplink RSSI
-- **Symptom / What Is Failing:**
-  1. `iw dev phy0-ap0 station dump` shows that when the client (`wlp9s0`, 2x2 802.11ac) is 1 meter from the AP and receives the AP's signal at **`-47 to -50 dBm`**, the AP reports the client's uplink RSSI as **`-72 dBm`** (~22–25 dB weaker than the downlink path).
-  2. Because the AP hears the client at `-72 dBm` (and/or lacks calibrated per-channel TX power tables), the 88W8864 firmware (`88W8864.bin`) caps downlink TX rate adaptation at **`VHT-MCS 4` (`390.0 MBit/s`) to `VHT-MCS 5` (`520.0 MBit/s`)** (`80MHz short GI VHT-NSS 2`) instead of `VHT-MCS 8/9` (`780.0–866.7 MBit/s`).
-  3. At `390.0 MBit/s` (`VHT-MCS 4`), 52% 802.11ac MAC efficiency yields **201–204 Mbits/sec TCP / 216 Mbits/sec UDP**. At `520.0 MBit/s` (`VHT-MCS 5`), 48% MAC efficiency yields **243–244 Mbits/sec TCP / 252 Mbits/sec UDP**.
-  4. Compounding this: because the laptop's Intel `iwlwifi` card hears the AP's beacons at a strong `-48 dBm`, `iwlwifi`'s dynamic Transmit Power Control (TPC) automatically lowers the laptop's `txpower` from `21.00 dBm` down to **`1.00 dBm`** after association (`iw dev wlp9s0 info`), causing the AP's rate adaptation to drop from `VHT-MCS 5` (`244 Mbps`) to `VHT-MCS 4` (`201 Mbps`).
-- **Architectural Root Cause:**
-  - On the Cisco 3702i (`Tide XL`), the 88W8864 uses external 5 GHz front-end modules (FEMs: external PAs, LNAs, and RX/TX switches/attenuators) and relies on per-board calibration data stored in Cisco NOR flash (`flash:/ap3g2-k9w7-mx.../Q5.bin` or radio EEPROM/OTP).
-  - Upstream `mwlwifi` loads the generic `88W8864.bin` firmware with **empty `txpwrlmt` tables** (`/sys/kernel/debug/ieee80211/phy0/mwlwifi/txpwrlmt` is 0 bytes), and `mwlwifi` does not parse or load Cisco's `Q5.bin` / `E5.bin` calibration tables via `HostCmd_CMD_802_11_RF_TX_POWER` / `HostCmd_CMD_SET_PWR_LIMIT`.
-
-### Roadblock B: 2.4 GHz (`mwl8k` 88W8764) Stuck at Legacy `MCS 1` (`13.0 MBit/s` PHY) When `ap_tx_ampdu=0`
-- **Symptom / What Is Failing:**
-  1. When `ap_tx_ampdu=1` is enabled in `driver/mwl8k/mwl8k.c`, the 88W8764 AP firmware (`fmimage_8764_ap-1.fw`) negotiates `MCS 15` (`130.0 MBit/s` 2x2 HT20) and bursts at `12.6+ Mbits/sec`, **but** as soon as `mac80211` invokes `mwl8k_ampdu_action(IEEE80211_AMPDU_TX_START)`, the deferred worker `mwl8k_check_ba()` calls `mwl8k_fw_lock()`.
-  2. `mwl8k_fw_lock()` stops all `mac80211` queues and calls `mwl8k_tx_wait_empty()`, which polls for all 4 hardware TX queues to drain to 0 packets. Under active TCP traffic, the firmware holds 20–82 packets in the TX ring waiting for BA/airtime scheduling and never drains to 0, causing a **15-second timeout** (`waiting for tx rings to drain (82 -> 20 pkts)`) during which all frames are dropped (`0.00 bits/sec`).
-  3. With `ap_tx_ampdu=0` (our current default in `892a68f`), the 15-second deadlock is completely eliminated, but `fmimage_8764_ap-1.fw`'s internal rate adaptation only transmits non-A-MPDU frames at **`MCS 1` (`13.0 MBit/s`)**, capping 2.4 GHz TCP throughput at **6.08–10.5 Mbits/sec DOWN / 4.05–6.29 Mbits/sec UP**.
-- **Architectural Root Cause:**
-  - `mwl8k_check_ba()` -> `mwl8k_create_ba()` (`MWL8K_CMD_BASTREAM`) wraps the firmware command in `mwl8k_fw_lock()`, which was designed for channel/radio reconfiguration (`mwl8k_tx_wait_empty()`), **not** live per-TID BlockAck stream creation during active traffic.
+### C. Cisco `flashfs` Radio & Calibration Extraction (`tools/extract_cisco_flashfs.py`)
+- Built [extract_cisco_flashfs.py](../tools/extract_cisco_flashfs.py) to parse Cisco's 520-byte (`0x208`) `flashfs` sector chain in `backups/full_flash_64m.bin` and **SHA-512 verified 261 extracted files**, including:
+  - **`8006.img` (`1,176,352` bytes decompressed) & `8004.img` (`1,189,888` bytes decompressed):** Proved to be Cisco's proprietary **ThreadX Cortex-A9 Split-MAC + CleanAir** radio firmwares (`8006.img version: B4.18.02`), incompatible with upstream `mwlwifi`/`mwl8k` `HostCmd` drivers.
+  - **`B5.bin` (`134,320` bytes decompressed), `E5.bin` (`127,312` bytes), `Q5.bin` (`342,672` bytes):** Bzip2-compressed 16-bit signed dBm per-channel regulatory TX power-limit tables (`0x0024` = Ch 36, `0x0028` = Ch 40; `AIR-CAP3702I-A-K9` uses `B5.bin` for Americas/FCC).
+  - **`triggerfish_cpld.img` (`2,460` bytes) & `MCU.bin` (`9,031` bytes):** Board CPLD/MCU images.
 
 ---
 
-## 4. Concrete Next Troubleshooting Actions
+## 3. Ready-to-Verify Optimizations Built Into `/home/leifdavisson/Downloads/openwrt-3702i.bin`
 
-Execute the following targeted steps to clear Roadblocks A and B:
+The repacked image at `/home/leifdavisson/Downloads/openwrt-3702i.bin` now contains three new optimizations ready for clean cold-boot benchmarking:
 
-### Action 1: Test Fixed High VHT-MCS Rates on 5 GHz (`mwlwifi` `fixed_rate` Debugfs)
-Verify whether the 88W8864 RF path can cleanly sustain `VHT-MCS 7/8/9` (`650–866.7 MBit/s`) when rate adaptation is bypassed via `mwlwifi`'s debugfs `fixed_rate` register:
-```bash
-# On the AP serial console or SSH:
-# Format of fixed_rate in mwlwifi: bit 8 = use fixed rate, bits [7:4] = NSS-1 (1 for 2SS), bits [3:0] = MCS (7, 8, or 9)
-# Also inspect mwlwifi debugfs info and firmware command handling for fixed_rate:
-cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/info
-echo 0x0117 > /sys/kernel/debug/ieee80211/phy0/mwlwifi/fixed_rate
-```
-- **What this proves:** If forcing `VHT-MCS 7/8` pushes 5 GHz TCP throughput from `244 Mbits/sec` to **350–450+ Mbits/sec** with low retries, then the 5 GHz PA/FEM hardware is already working and the `VHT-MCS 4/5` cap is purely an uplink RSSI (`-72 dBm`) / firmware rate-table (`HostCmd_CMD_SET_FIXED_RATE` / `HostCmd_CMD_802_11_TX_RATE_QUERY`) issue.
+1. **2-Core SMP TX Pipeline in `mwlwifi` (`patches/mwlwifi-powerpc-fixes.patch`):**
+   - `eth0` `rps_cpus=2` runs `br-lan` + `mac80211` (`pcie_8864_tx_xmit`) on **`CPU1`**.
+   - `pcie_8864_schedule_tx()` uses lockless `smp_call_function_single_async(0, &pcie_priv->tx_csd)` to schedule `pcie_priv->tx_task` (`pcie_8864_tx_skbs`: A-MSDU `memcpy` + `dma_map_single`) on **`CPU0`** alongside `eth0` zero-copy NAPI (`14%` CPU) and `IRQ 17`.
+2. **Fast-Path `ieee80211_free_txskb()` TX-Done Reclaim (`driver/mwlwifi/hif/pcie/8864/tx.c`):**
+   - Skips cold-cacheline `memmove()` + `sta_info_get_by_addrs()` on 63 out of every 64 normal data frames in `pcie_non_pfu_tx_done()`, while sampling 1/64 frames via `ieee80211_tx_status()` so `iw station dump` `tx bitrate` and `last_ack` remain live.
+3. **Default `ap_tx_ampdu = true` + Lockless `MWL8K_CMD_BASTREAM` (`driver/mwl8k/mwl8k.c`):**
+   - Enables 2.4 GHz `MCS 15` (`144.4 MBit/s`) hardware A-MPDU automatically on boot.
 
-### Action 2: Extract & Inspect Cisco 3702i Radio Calibration Files (`Q5.bin` / `Q2.bin` / CPLD Registers)
-Inspect the Cisco IOS image directory in NOR flash (`backups/full_flash_64m.bin`) and CPLD registers (`0xffdf0000`) to identify the 5 GHz LNA/FEM control bits and per-channel calibration tables:
-```bash
-# On the host workstation:
-strings -n 6 backups/full_flash_64m.bin | grep -E '8864|8764|txpwr|fem|lna|cal' | head -n 40
-```
-- Compare CPLD register values (`0xffdf0000`–`0xffdf003f`) dumped during native Cisco IOS operation (when both radios are active) against `driver/radio_reset.c` (`CPLD_RADIO_RESET = 0x1e`) to check if an additional CPLD register enables the external 5 GHz LNA / RX switch.
+> **Important Hardware Note:** Do **not** run `rmmod mwlwifi` on a live system without re-running `radio_reset` (GPIO 3 reset pulse), because `pcie_reset()` on the 88W8864 hangs the P1023 PCIe bus until power-cycled. Always test `mwlwifi.ko` updates via clean PoE TFTP RAM-boot (`openwrt-3702i.bin`).
 
-### Action 3: Lockless `MWL8K_CMD_BASTREAM` for 2.4 GHz (`driver/mwl8k/mwl8k.c`)
-Modify `mwl8k_check_ba()` in `driver/mwl8k/mwl8k.c` so that `MWL8K_CMD_BASTREAM` (`BA_FLAG_CREATE`) is issued using mutex serialization (`mutex_lock(&priv->fw_mutex)` when `priv->fw_state == FW_STATE_INIT_COMPLETE`) **without** calling `mwl8k_tx_wait_empty()`:
-```c
-/* In driver/mwl8k/mwl8k.c: mwl8k_check_ba() */
-/* Instead of calling mwl8k_fw_lock(hw) -> mwl8k_tx_wait_empty(hw), acquire
- * priv->fw_mutex directly to serialize the command buffer, send
- * mwl8k_create_ba() (MWL8K_CMD_BASTREAM), and call ieee80211_start_tx_ba_cb_irqsafe()
- * while hardware TX rings continue draining normally.
- */
-```
-- Test with `echo 1 > /sys/module/mwl8k/parameters/ap_tx_ampdu` on the running AP and run `iperf3` on 2.4 GHz (`phy1-ap0`) to verify `MCS 15` (`130 MBit/s` HT20) A-MPDU aggregation without the 15-second TX-drain stall.
+---
+
+## 4. Next Troubleshooting & Verification Steps
+
+1. **PoE Power-Cycle & Boot the Repacked SMP-Pipelined Image (`/home/leifdavisson/Downloads/openwrt-3702i.bin`):**
+   ```bash
+   POE_SWITCH_PASS='<switch_password>' python3 tools/poe_bounce_to_rommon.py
+   # Then boot tftp://192.168.1.153/openwrt-3702i.bin from ap: (or run powercycle_and_boot.py)
+   ```
+2. **Benchmark the 2-Core SMP `tx_csd` Pipeline on 5 GHz & Verify `/proc/stat` Balance:**
+   ```bash
+   nmcli dev wifi rescan ifname wlp9s0 && sleep 3
+   nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid 64:DC:72:D0:FF:FF
+   python3 tools/serial_cmd.py "grep '^cpu' /proc/stat"
+   iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R
+   iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -P 4 -R
+   python3 tools/serial_cmd.py "grep '^cpu' /proc/stat; iw dev phy0-ap0 station dump"
+   ```
+   - **Expected:** `CPU0` and `CPU1` both share ~50–70% `softirq` instead of `CPU1` hitting 97.5% while `CPU0` sits 69% idle, lifting 5 GHz TCP goodput past the ~251 Mbits/sec single-core wall toward **320–420+ Mbits/sec**.
+3. **Translate `B5.bin` / `E5.bin` into `dts/cisco-3702i.dts` `marvell,powertable`:**
+   - Add the `mwlwifi` child DT node (`marvell,2ghz;` + `marvell,powertable`) under `pci0` in `dts/cisco-3702i.dts` using the calibrated per-channel values extracted from `B5.bin` / `E5.bin` so `88W8864` uses calibrated EVM-safe power levels for `VHT-MCS 7/8/9` (`650–866.7 MBit/s`).
+4. **Enable `HT40` (`noscan=1` / `HT40+`) & Tune `mwl8k` TX Queues on 2.4 GHz:**
+   - Verify automatic boot-time `MCS 15` (`144.4 MBit/s`) `HT20` and test `HT40` (`300 MBit/s` PHY) + 4-stream TCP on `phy1-ap0`.
 
 ---
 
