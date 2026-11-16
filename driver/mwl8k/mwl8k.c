@@ -1897,6 +1897,10 @@ static inline void mwl8k_tx_count_packet(struct ieee80211_sta *sta, u8 tid)
  */
 #define BA_QUEUE		5
 
+static bool ap_tx_ampdu;
+module_param(ap_tx_ampdu, bool, 0644);
+MODULE_PARM_DESC(ap_tx_ampdu, "Enable AP-mode TX A-MPDU aggregation (default: false)");
+
 static void
 mwl8k_txq_xmit(struct ieee80211_hw *hw,
 	       int index,
@@ -1988,7 +1992,7 @@ mwl8k_txq_xmit(struct ieee80211_hw *hw,
 
 	txpriority = index;
 
-	if (priv->ap_fw && sta && sta->deflink.ht_cap.ht_supported && !eapol_frame &&
+	if (priv->ap_fw && ap_tx_ampdu && sta && sta->deflink.ht_cap.ht_supported && !eapol_frame &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
 		mwl8k_tx_count_packet(sta, tid);
