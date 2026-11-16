@@ -165,6 +165,15 @@ done
         [ $((0x$o & 1)) -eq 1 ] && uci -q set wireless.default_radio$n.macaddr="06:$mid:0$n"
         n=$((n + 1))
     done
+    # The 88W8764 on the PCIe controller at 0xa000 is the 2.4 GHz radio (3702i and 2602i) but advertises
+    # both bands, and "wifi config" labels it 5 GHz. Correct the default as long as it is untouched.
+    for r in $(uci show wireless 2>/dev/null | sed -n "s/^wireless\\.\\(radio[0-9]*\\)\\.path=.*a000.*/\\1/p"); do
+        if [ "$(uci -q get wireless.$r.band)" = "5g" ] && [ "$(uci -q get wireless.$r.channel)" = "36" ]; then
+            uci -q set wireless.$r.band="2g"
+            uci -q set wireless.$r.channel="6"
+            uci -q set wireless.$r.htmode="HT20"
+        fi
+    done
     uci -q commit wireless
 ) &
 """
