@@ -141,9 +141,23 @@ single core has to carry for every Wi-Fi frame.
 
 ## 8. Not yet explained
 
-* Bench report: the client hears the AP at −54 dBm while the AP reports the client at −76 dBm. A
-  351 Mbit/s uplink PHY rate is not possible at a true −76 dBm, so this looks like RSSI scaling in
-  the driver rather than a deaf receiver — unverified.
+* **Resolved by the repository author's follow-up test:** the −54 dBm / −76 dBm asymmetry in the
+  bench report was the client, not the AP — with power-save on, its Intel adapter transmitted at
+  1 dBm; with power-save off (21 dBm) the AP's RX rate and the throughput recovered. My guess in an
+  earlier revision of this file (RSSI scaling in the driver) was wrong. On this bench the phone was
+  heard at −31 … −45 dBm.
+* **Corroboration for the VHT MCS endianness bug** he found in `mwl_fwcmd_set_new_stn_add()`
+  (`*((u32 *)&…vht_mcs.rx_mcs_map) | mask` reads two `__le16` fields with host byte order — wrong
+  on big-endian): in every 5 GHz sample on this bench the AP transmitted at VHT-MCS 6 or 7
+  (585 / 650 Mbit/s, NSS 2) at −31 … −45 dBm, while the same client transmitted to the AP at
+  VHT-MCS 9. The AP side never used MCS 8/9. The source in this tree matches his description at
+  both call sites (`hif/fwcmd.c`, the two `vht_max_rx_mcs` assignments); the fix was not applied or
+  tested here.
+* `mwl8k` and A-MPDU on AP firmware: `mwl8k_sta_add()` indeed sets `is_ampdu_allowed` only for
+  station firmware, but with AP firmware the flag is set later in the TX-reclaim path once frames
+  go out at MCS ≥ 1 — a path that depends on TX-done interrupts. On a tree without the interrupt
+  fix of section 4 that path is starved, so 2.4 GHz results taken before that fix say little about
+  A-MPDU. Not tested with a client here.
 * Both radios run generic Marvell firmware. Cisco IOS loads its own radio images and per-domain
   power tables (`8004.img`, `Q2.bin`/`Q5.bin`, `E2.bin`/`E5.bin` in the IOS directory;
   `loading Power Tables from ram:/Q5.bin. Class = E` at boot), and the radio MAC addresses read
