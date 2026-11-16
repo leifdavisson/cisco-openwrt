@@ -80,7 +80,10 @@ File "flash:/openwrt-2602i.bin" uncompressed and installed, entry point: 0x16000
 With the install proven, everything Cisco was deleted from `flash:` in ROMMON
 (`tools/rommon_clean_flash.py --keep openwrt-2602i.bin env_vars private-multiple-fs --delete`:
 IOS image directory, recovery image, event logs, saved CAPWAP configuration — 23.2 MiB in about
-100 files). A raw dump of the 32 MiB chip was taken from Linux beforehand.
+100 files). A raw dump of the 32 MiB chip was taken from Linux beforehand. The exact command, the
+script as it ran and the full ROMMON transcript are in [logs/2602i-clean-flash/](logs/2602i-clean-flash/).
+(The run used the bench script; `tools/rommon_clean_flash.py` is its tidied version and has not
+itself run on hardware yet.)
 
 | | Before | After |
 |---|---|---|

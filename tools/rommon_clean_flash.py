@@ -17,7 +17,8 @@ Always keep:
 
 THIS IS PERMANENT. Once the IOS image is gone the only way back to Cisco software is to
 copy an image you have obtained yourself through ROMMON. The bootloader is not touched.
-Used on an AIR-CAP2602I (free space 0.5 MiB -> 23.8 MiB); the AP still cold-boots OpenWrt.
+The bench version of this script ran on an AIR-CAP2602I (free space 0.5 MiB -> 23.8 MiB, AP still
+cold-boots OpenWrt): docs/logs/2602i-clean-flash/. This tidied version has not run on hardware yet.
 """
 import argparse
 import re

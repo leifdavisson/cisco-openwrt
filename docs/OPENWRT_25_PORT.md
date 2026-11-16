@@ -359,7 +359,7 @@ to the AP, or use a single-port server (`dnsmasq --enable-tftp --tftp-single-por
 | `tools/xmodem_boot.py` | new: RAM boot through the console cable |
 | `driver/mwl8k/mwl8k.c`, `driver/mwl8k/Makefile` | channel-context emulation ops (guarded) |
 | `driver/mwlwifi-local.patch` | same two additions, patch regenerated against `db97edf` |
-| `tools/rommon_clean_flash.py` | new: remove the Cisco software from `flash:` in ROMMON (ran on a 2602i; list-only by default) |
+| `tools/rommon_clean_flash.py` | new: remove the Cisco software from `flash:` in ROMMON (list-only by default). Tidied version of the bench script that ran on a 2602i — see `docs/logs/2602i-clean-flash/`; not yet run on hardware in this form |
 | `tools/build_image.py` | new: parameterised builder that produced the verified 25.12.6 image (static IP or DHCP, MAC hook, overlay, no sysupgrade) |
 | `tests/test_xmodem_boot.py` | new: runs `xmodem_boot.py` (RAM boot and `--install`) against a simulated ROMMON on a pty |
 | `.github/workflows/ci.yml` | `pyserial` added so that test runs in CI |

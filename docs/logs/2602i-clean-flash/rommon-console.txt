@@ -1,0 +1,468 @@
+
+ap: dir flash:
+Directory of flash:/
+
+2    -rwx  62934     <date>               event.log
+3    -rwx  0         <date>               config.txt
+4    -rwx  296       <date>               capwap-saved-config
+5    -rwx  64        <date>               sensord_CSPRNG0
+9    -rwx  95008     <date>               lwapp_reap.cfg.bak
+51   drwx  640       <date>               configs
+52   -rwx  64        <date>               sensord_CSPRNG1
+80   -rwx  59958     <date>               event.capwap
+21   -rwx  11288     <date>               private-multiple-fs
+55   -rwx  132152    <date>               event.r1
+13   drwx  448       <date>               ap3g2-rcvk9w8-mx
+6    drwx  2496      <date>               ap3g2-k9w8-mx.153-3.JF14
+56   -rwx  1         <date>               ce
+99   -rwx  8208384   <date>               openwrt-2602i.bin
+90   -rwx  297       <date>               capwap-saved-config-bak
+96   -rwx  114       <date>               pnp-saved-config
+102  -rwx  362       <date>               env_vars
+
+513024 bytes available (31484928 bytes used)
+ap: dir flash:/
+Directory of flash://
+
+2    -rwx  62934     <date>               event.log
+3    -rwx  0         <date>               config.txt
+4    -rwx  296       <date>               capwap-saved-config
+5    -rwx  64        <date>               sensord_CSPRNG0
+9    -rwx  95008     <date>               lwapp_reap.cfg.bak
+51   drwx  640       <date>               configs
+52   -rwx  64        <date>               sensord_CSPRNG1
+80   -rwx  59958     <date>               event.capwap
+21   -rwx  11288     <date>               private-multiple-fs
+55   -rwx  132152    <date>               event.r1
+13   drwx  448       <date>               ap3g2-rcvk9w8-mx
+6    drwx  2496      <date>               ap3g2-k9w8-mx.153-3.JF14
+56   -rwx  1         <date>               ce
+99   -rwx  8208384   <date>               openwrt-2602i.bin
+90   -rwx  297       <date>               capwap-saved-config-bak
+96   -rwx  114       <date>               pnp-saved-config
+102  -rwx  362       <date>               env_vars
+
+513024 bytes available (31484928 bytes used)
+ap: delete flash:/event.log
+Are you sure you want to delete "flash:/event.log" (y/n)?y
+File "flash:/event.log" deleted
+ap: delete flash:/config.txt
+Are you sure you want to delete "flash:/config.txt" (y/n)?y
+File "flash:/config.txt" deleted
+ap: delete flash:/capwap-saved-config
+Are you sure you want to delete "flash:/capwap-saved-config" (y/n)?y
+File "flash:/capwap-saved-config" deleted
+ap: delete flash:/sensord_CSPRNG0
+Are you sure you want to delete "flash:/sensord_CSPRNG0" (y/n)?y
+File "flash:/sensord_CSPRNG0" deleted
+ap: delete flash:/lwapp_reap.cfg.bak
+Are you sure you want to delete "flash:/lwapp_reap.cfg.bak" (y/n)?y
+File "flash:/lwapp_reap.cfg.bak" deleted
+ap: dir flash:/configs/
+Directory of flash:/configs//
+
+53   -rwx  152       <date>               TLV_WLAN_FEAT_STATUS_file
+77   -rwx  190       <date>               AP_STAMODE_FALLBACK_PAYLOAD_file
+78   -rwx  75        <date>               AP_ARPCACHE_PAYLOAD_file
+79   -rwx  75        <date>               AP_VIDEO_MCAST_GROUP_CFG_PAYLOAD_file
+83   -rwx  152       <date>               AP_LAYER2_ACL_MAPPING_PAYLOAD_file
+88   -rwx  75        <date>               AP_SUBNET_BCAST_DROP_PAYLOAD_file
+95   -rwx  75        <date>               TLV_FLEX_AVC_CONFIG_PAYLOAD_file
+100  -rwx  75        <date>               TLV_FLEX_LOCAL_AUTH_PARAM_PAYLOAD_file
+101  -rwx  912       <date>               lwapp_centraldhcpMap.cfg
+106  -rwx  1104      <date>               lwapp_lsaclmap.cfg
+
+672768 bytes available (31325184 bytes used)
+ap: delete flash:/configs/TLV_WLAN_FEAT_STATUS_file
+Are you sure you want to delete "flash:/configs/TLV_WLAN_FEAT_STATUS_file" (y/n)?y
+File "flash:/configs/TLV_WLAN_FEAT_STATUS_file" deleted
+ap: delete flash:/configs/AP_STAMODE_FALLBACK_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/AP_STAMODE_FALLBACK_PAYLOAD_file" (y/n)?y
+File "flash:/configs/AP_STAMODE_FALLBACK_PAYLOAD_file" deleted
+ap: delete flash:/configs/AP_ARPCACHE_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/AP_ARPCACHE_PAYLOAD_file" (y/n)?y
+File "flash:/configs/AP_ARPCACHE_PAYLOAD_file" deleted
+ap: delete flash:/configs/AP_VIDEO_MCAST_GROUP_CFG_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/AP_VIDEO_MCAST_GROUP_CFG_PAYLOAD_file" (y/n)?y
+File "flash:/configs/AP_VIDEO_MCAST_GROUP_CFG_PAYLOAD_file" deleted
+ap: delete flash:/configs/AP_LAYER2_ACL_MAPPING_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/AP_LAYER2_ACL_MAPPING_PAYLOAD_file" (y/n)?y
+File "flash:/configs/AP_LAYER2_ACL_MAPPING_PAYLOAD_file" deleted
+ap: delete flash:/configs/AP_SUBNET_BCAST_DROP_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/AP_SUBNET_BCAST_DROP_PAYLOAD_file" (y/n)?y
+File "flash:/configs/AP_SUBNET_BCAST_DROP_PAYLOAD_file" deleted
+ap: delete flash:/configs/TLV_FLEX_AVC_CONFIG_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/TLV_FLEX_AVC_CONFIG_PAYLOAD_file" (y/n)?y
+File "flash:/configs/TLV_FLEX_AVC_CONFIG_PAYLOAD_file" deleted
+ap: delete flash:/configs/TLV_FLEX_LOCAL_AUTH_PARAM_PAYLOAD_file
+Are you sure you want to delete "flash:/configs/TLV_FLEX_LOCAL_AUTH_PARAM_PAYLOAD_file" (y/n)?y
+File "flash:/configs/TLV_FLEX_LOCAL_AUTH_PARAM_PAYLOAD_file" deleted
+ap: delete flash:/configs/lwapp_centraldhcpMap.cfg
+Are you sure you want to delete "flash:/configs/lwapp_centraldhcpMap.cfg" (y/n)?y
+File "flash:/configs/lwapp_centraldhcpMap.cfg" deleted
+ap: delete flash:/configs/lwapp_lsaclmap.cfg
+Are you sure you want to delete "flash:/configs/lwapp_lsaclmap.cfg" (y/n)?y
+File "flash:/configs/lwapp_lsaclmap.cfg" deleted
+ap: rmdir flash:/configs
+Are you sure you want to remove "flash:/configs" (y/n)?y
+Directory "flash:/configs" removed
+ap: delete flash:/sensord_CSPRNG1
+Are you sure you want to delete "flash:/sensord_CSPRNG1" (y/n)?y
+File "flash:/sensord_CSPRNG1" deleted
+ap: delete flash:/event.capwap
+Are you sure you want to delete "flash:/event.capwap" (y/n)?y
+File "flash:/event.capwap" deleted
+ap: delete flash:/event.r1
+Are you sure you want to delete "flash:/event.r1" (y/n)?y
+File "flash:/event.r1" deleted
+ap: dir flash:/ap3g2-rcvk9w8-mx/
+Directory of flash:/ap3g2-rcvk9w8-mx//
+
+14   -rwx  206045    <date>               ap3g2-rcvk9w8-mx
+15   -rwx  6992944   <date>               ap3g2-rcvk9w8-xx
+16   -rwx  263       <date>               info
+17   -rwx  426       <date>               file_hashes
+18   -rwx  141       <date>               final_hash
+19   -rwx  1375      <date>               img_sign_rel.cert
+20   -rwx  1371      <date>               img_sign_rel_sha2.cert
+
+873472 bytes available (31124480 bytes used)
+ap: delete flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-mx
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-mx" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-mx" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-xx
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-xx" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/ap3g2-rcvk9w8-xx" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/info
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/info" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/info" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/file_hashes
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/file_hashes" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/file_hashes" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/final_hash
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/final_hash" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/final_hash" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/img_sign_rel.cert
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/img_sign_rel.cert" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/img_sign_rel.cert" deleted
+ap: delete flash:/ap3g2-rcvk9w8-mx/img_sign_rel_sha2.cert
+Are you sure you want to delete "flash:/ap3g2-rcvk9w8-mx/img_sign_rel_sha2.cert" (y/n)?y
+File "flash:/ap3g2-rcvk9w8-mx/img_sign_rel_sha2.cert" deleted
+ap: rmdir flash:/ap3g2-rcvk9w8-mx
+Are you sure you want to remove "flash:/ap3g2-rcvk9w8-mx" (y/n)?y
+Directory "flash:/ap3g2-rcvk9w8-mx" removed
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14//
+
+7    -rwx  512       <date>               final_hash.sig
+8    -rwx  141       <date>               final_hash
+10   -rwx  8655      <date>               file_hashes
+11   -rwx  1371      <date>               img_sign_rel_sha2.cert
+12   -rwx  1375      <date>               img_sign_rel.cert
+22   -rwx  291       <date>               info
+23   -rwx  9031      <date>               MCU.bin
+24   -rwx  18818     <date>               uart_firmware_upgrade.bin
+25   -rwx  2460      <date>               triggerfish_cpld.img
+26   -rwx  605621    <date>               8006.img
+27   -rwx  1875      <date>               Y5.bin
+28   -rwx  7008      <date>               Y2.bin
+29   -rwx  2333      <date>               B5.bin
+30   -rwx  10512     <date>               B2.bin
+31   -rwx  2049      <date>               HA5.bin
+32   -rwx  3609      <date>               U5.bin
+33   -rwx  5840      <date>               HA2.bin
+34   -rwx  8176      <date>               U2.bin
+35   -rwx  4220      <date>               F5.bin
+36   -rwx  15184     <date>               F2.bin
+37   -rwx  16361     <date>               C5.bin
+38   -rwx  30368     <date>               C2.bin
+39   -rwx  3957      <date>               Q5.bin
+40   -rwx  8176      <date>               Q2.bin
+41   -rwx  4547      <date>               R5.bin
+42   -rwx  15184     <date>               R2.bin
+43   -rwx  514       <date>               V5.bin
+44   -rwx  12848     <date>               V2.bin
+45   -rwx  1916      <date>               X5.bin
+46   -rwx  16352     <date>               X2.bin
+47   -rwx  2213      <date>               E5.bin
+48   -rwx  19856     <date>               E2.bin
+49   -rwx  576049    <date>               8004.img
+50   -rwx  13386429  <date>               ap3g2-k9w8-xx.153-3.JF14
+54   drwx  64        <date>               html
+93   -rwx  189183    <date>               ap3g2-bl-3600
+94   -rwx  190140    <date>               ap3g2-bl-2600
+97   -rwx  73        <date>               ap3g2-k9w8-tx.153-3.JF14
+98   -rwx  230262    <date>               ap3g2-k9w8-mx.153-3.JF14
+
+8078336 bytes available (23919616 bytes used)
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash.sig
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash.sig" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash.sig" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/final_hash" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/file_hashes
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/file_hashes" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/file_hashes" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel_sha2.cert
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel_sha2.cert" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel_sha2.cert" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel.cert
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel.cert" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/img_sign_rel.cert" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/info
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/info" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/info" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/MCU.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/MCU.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/MCU.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/uart_firmware_upgrade.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/uart_firmware_upgrade.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/uart_firmware_upgrade.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/triggerfish_cpld.img
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/triggerfish_cpld.img" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/triggerfish_cpld.img" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/8006.img
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/8006.img" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/8006.img" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/Y5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/Y5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/Y5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/Y2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/Y2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/Y2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/B5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/B5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/B5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/B2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/B2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/B2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/HA5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/HA5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/HA5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/U5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/U5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/U5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/HA2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/HA2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/HA2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/U2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/U2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/U2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/F5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/F5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/F5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/F2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/F2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/F2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/C5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/C5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/C5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/C2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/C2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/C2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/Q5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/Q5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/Q5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/Q2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/Q2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/Q2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/R5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/R5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/R5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/R2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/R2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/R2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/V5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/V5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/V5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/V2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/V2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/V2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/X5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/X5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/X5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/X2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/X2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/X2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/E5.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/E5.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/E5.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/E2.bin
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/E2.bin" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/E2.bin" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/8004.img
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/8004.img" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/8004.img" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-xx.153-3.JF14
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-xx.153-3.JF14" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-xx.153-3.JF14" deleted
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/html/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14/html//
+
+57   drwx  128       <date>               level
+
+22892032 bytes available (9105920 bytes used)
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14/html/level//
+
+59   drwx  576       <date>               15
+69   drwx  640       <date>               1
+
+22892032 bytes available (9105920 bytes used)
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15//
+
+60   -rwx  3371      <date>               easyApManagementSummary.shtml.gz
+61   -rwx  4999      <date>               easyApManagementConfig.shtml.gz
+62   -rwx  967       <date>               easyApManagement.html
+63   -rwx  985       <date>               officeExtendapSummary.htm
+64   -rwx  3350      <date>               officeExtendapMain.shtml.gz
+65   -rwx  5721      <date>               officeExtendapHelp.htm
+66   -rwx  988       <date>               officeExtendapEvent.shtml.gz
+67   -rwx  3147      <date>               officeExtendapConfig.shtml.gz
+68   -rwx  7514      <date>               officeExtendapBanner.htm
+
+22892032 bytes available (9105920 bytes used)
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementSummary.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementSummary.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementSummary.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementConfig.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementConfig.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagementConfig.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagement.html
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagement.html" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/easyApManagement.html" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapSummary.htm
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapSummary.htm" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapSummary.htm" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapMain.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapMain.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapMain.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapHelp.htm
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapHelp.htm" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapHelp.htm" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapEvent.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapEvent.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapEvent.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapConfig.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapConfig.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapConfig.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapBanner.htm
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapBanner.htm" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15/officeExtendapBanner.htm" deleted
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/15" removed
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1//
+
+70   -rwx  29225     <date>               config.js
+71   drwx  320       <date>               images
+81   -rwx  1540      <date>               ap_home.shtml.gz
+82   -rwx  95957     <date>               jquery-1.11.3.min.js
+84   -rwx  41801     <date>               officeExtendap.css
+85   -rwx  779       <date>               config-oeap.js
+87   -rwx  17290     <date>               sitewide.js
+89   -rwx  20442     <date>               forms.js
+91   -rwx  512       <date>               back.shtml
+92   -rwx  563       <date>               appsui.js
+
+22925312 bytes available (9072640 bytes used)
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config.js" deleted
+ap: dir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/
+Directory of flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images//
+
+72   -rwx  2822      <date>               itp-logo.png
+73   -rwx  19671     <date>               login_homeap.gif
+74   -rwx  399       <date>               info.gif
+75   -rwx  1648      <date>               cisco-logo-2007.gif
+76   -rwx  732       <date>               background_web41.jpg
+
+22955008 bytes available (9042944 bytes used)
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/itp-logo.png
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/itp-logo.png" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/itp-logo.png" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/login_homeap.gif
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/login_homeap.gif" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/login_homeap.gif" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/info.gif
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/info.gif" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/info.gif" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/cisco-logo-2007.gif
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/cisco-logo-2007.gif" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/cisco-logo-2007.gif" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/background_web41.jpg
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/background_web41.jpg" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images/background_web41.jpg" deleted
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/images" removed
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/ap_home.shtml.gz
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/ap_home.shtml.gz" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/ap_home.shtml.gz" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/jquery-1.11.3.min.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/jquery-1.11.3.min.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/jquery-1.11.3.min.js" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/officeExtendap.css
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/officeExtendap.css" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/officeExtendap.css" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config-oeap.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config-oeap.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/config-oeap.js" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/sitewide.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/sitewide.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/sitewide.js" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/forms.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/forms.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/forms.js" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/back.shtml
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/back.shtml" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/back.shtml" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/appsui.js
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/appsui.js" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1/appsui.js" deleted
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level/1" removed
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14/html/level
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14/html/level" removed
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14/html
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14/html" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14/html" removed
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-3600
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-3600" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-3600" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-2600
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-2600" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-bl-2600" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-tx.153-3.JF14
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-tx.153-3.JF14" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-tx.153-3.JF14" deleted
+ap: delete flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-mx.153-3.JF14
+Are you sure you want to delete "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-mx.153-3.JF14" (y/n)?y
+File "flash:/ap3g2-k9w8-mx.153-3.JF14/ap3g2-k9w8-mx.153-3.JF14" deleted
+ap: rmdir flash:/ap3g2-k9w8-mx.153-3.JF14
+Are you sure you want to remove "flash:/ap3g2-k9w8-mx.153-3.JF14" (y/n)?y
+Directory "flash:/ap3g2-k9w8-mx.153-3.JF14" removed
+ap: delete flash:/ce
+Are you sure you want to delete "flash:/ce" (y/n)?y
+File "flash:/ce" deleted
+ap: delete flash:/capwap-saved-config-bak
+Are you sure you want to delete "flash:/capwap-saved-config-bak" (y/n)?y
+File "flash:/capwap-saved-config-bak" deleted
+ap: delete flash:/pnp-saved-config
+Are you sure you want to delete "flash:/pnp-saved-config" (y/n)?y
+File "flash:/pnp-saved-config" deleted
+ap: dir flash:
+Directory of flash:/
+
+21   -rwx  11288     <date>               private-multiple-fs
+99   -rwx  8208384   <date>               openwrt-2602i.bin
+102  -rwx  362       <date>               env_vars
+
+23776256 bytes available (8221696 bytes used)
+ap: 
