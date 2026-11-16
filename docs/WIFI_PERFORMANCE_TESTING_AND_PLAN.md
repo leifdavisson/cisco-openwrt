@@ -97,22 +97,82 @@ pcmd->peer_info.vht_max_rx_mcs =
 3. Reduce `p1023_poll_timer_fn` interval from `250000` ns (250 µs) to `100000` ns (100 µs).
 4. *(Phase 2)* Replace `dma_alloc_coherent()` bounce buffers with cached `napi_alloc_skb()` + `dma_map_single()` / `dma_unmap_single()` (since `IM_MODE_GBL = 0x20000000` is enabled in `rx_pram`/`tx_pram`).
 
-### Task 3: Fix 2.4 GHz (`driver/mwl8k/mwl8k.c`) AMPDU Initialization in AP Mode — **DONE (`758d106`, re-test pending)**
-1. In `mwl8k_sta_add()` (`driver/mwl8k/mwl8k.c:5414`), set `MWL8K_STA(sta)->is_ampdu_allowed = true` when `sta->deflink.ht_cap.ht_supported` is true in the `else` (`priv->ap_fw`) branch.
-2. In `mwl8k_ampdu_action()` (`driver/mwl8k/mwl8k.c:5580`), reduce `msleep(1000)` to `msleep(50)` so ADDBA negotiation does not stall and drop QoS data frames for 1–2 seconds.
+### Task 3: Fix 2.4 GHz (`driver/mwl8k/mwl8k.c`) AMPDU Deadlock in AP Mode — **DIAGNOSED (`ae76708`)**
+1. Setting `is_ampdu_allowed = true` prematurely in `mwl8k_sta_add()` caused `mwl8k` to negotiate `MCS 15` (`130.0 MBit/s`), but immediately hit a **15-second TX-ring drain deadlock** (`ieee80211 phy1: waiting for tx rings to drain (82 -> 20 pkts)`) inside `mwl8k_check_ba()` → `mwl8k_fw_lock()`, stalling TCP download to `0.00 bits/sec` (`ae76708` reverted the `mwl8k_sta_add` change and kept `msleep(50)`).
+2. See **Section 5.2** below for the exact root cause and fix.
 
-### Task 5: Bring CPU 1 Online (`boot/smp`) + Split Pipeline via RPS & IRQ Affinity — **DONE & VERIFIED**
+### Task 4: Bring CPU 1 Online (`boot/smp`) + Split Pipeline via RPS & IRQ Affinity — **DONE & VERIFIED (`ae76708`)**
 - **SMP Bring-Up (`boot/smp/shim.S` + `bootpg.S` by Marco Mata, integrated into `tools/repack_openwrt_image.py`):**
   Sets `HID1 |= ASTME | ABE | MBDD`, enables the 256 KB L2 cache (`L2CTL`), copies the 4 KiB secondary boot page to `0x0ff00000`, releases Core 1 via `BPTR` + `EEBPCR[CPU1_EN]` into the ePAPR spin-table at `0x0ff00800`, and synchronizes both timebases (`smp: Brought up 1 node, 2 CPUs`, `160.00 BogoMIPS`).
 - **RPS + IRQ Affinity Pipeline Split (now in `/etc/rc.local`):**
   Without RPS, `eth0`'s `hrtimer` NAPI and `mwlwifi`'s `tx_task` tasklet both run on `CPU1` (`3485` softirq ticks on `CPU1` vs `405` on `CPU0`). Routing `IRQ 17/18` (`mwlwifi`/`mwl8k`) to `CPU0` and setting `rps_cpus=1` on `eth0` + `rps_cpus=2` on `phy0-ap0`/`phy1-ap0` splits Ethernet RX (`CPU1`) from Bridge + Wi-Fi TX (`CPU0`), pushing **5 GHz TCP download to 244–258 Mbits/sec** and **UDP to 252 Mbits/sec**!
+
+---
+
+## 5. Technical Ceiling Analysis: What's Failing, Architectural Roadblocks & Next Actions
+
+With both 800 MHz e500v2 cores online (`CPU0` at ~93% softirq, `CPU1` at ~36% softirq during the 20s benchmark suite), **1-stream TCP (`244 Mbps`), 4-stream TCP (`243 Mbps`), and 300M UDP (`252 Mbps`) all hit the exact same ~250 Mbits/sec wall**. Here are the three architectural roadblocks causing this ceiling and the exact troubleshooting steps to clear them:
+
+### 5.1 Roadblock #1: 5 GHz PHY Rate Ceiling (`VHT-MCS 5`, `520 MBit/s` TX) & Missing Cisco RF Calibration
+- **What's Failing:**
+  `iw dev phy0-ap0 station dump` during the 250 Mbps runs shows:
+  - Client `wlp9s0` hears AP at **`-48 dBm`** (excellent signal, right next to the AP), yet the AP hears the client (`21 dBm` TX) at **`-72 dBm`**!
+  - AP transmits at **`520.0 MBit/s VHT-MCS 5 80MHz short GI VHT-NSS 2`** while receiving at `650.0 MBit/s VHT-MCS 7`.
+  - At `520 MBit/s` PHY rate, ~48% 802.11ac MAC/A-MPDU efficiency imposes a hard air-interface ceiling of **~250 Mbits/sec** — matching our observed `244–252 Mbits/sec`.
+- **Why:**
+  1. **Generic Marvell `88W8864.bin` vs Cisco Per-Unit Calibration (`Q5.bin` / `E5.bin`) & External FEM:** Cisco IOS loads board-specific power/calibration tables (`loading Power Tables from ram:/Q5.bin. Class = E`) and configures the external 5 GHz RF Front-End Module (PA/LNA/attenuator GPIOs). Without the Cisco power table or LNA GPIO config, the 88W8864 sees ~20 dB of RX attenuation (`-72 dBm` vs `-48 dBm`) and its internal rate control refuses to step up to 256-QAM (`VHT-MCS 8/9`, `780–866.7 MBit/s`).
+  2. **Firmware Rate Table (`ratetable` / `vht_max_rx_mcs`):** Verify what rate table the 88W8864 firmware actually programmed for `aid=1` after our `vht_max_rx_mcs` endianness fix.
+- **Concrete Next Troubleshooting Actions:**
+  ```bash
+  # 1. Inspect the active 88W8864 firmware rate table and power limits for station 1:
+  python3 tools/serial_cmd.py "cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/ratetable; cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/txpwrlmt"
+
+  # 2. Test forcing VHT-MCS 8 / MCS 9 (2SS, 80 MHz, SGI) via debugfs fixed_rate
+  #    to prove whether 256-QAM works cleanly at -48 dBm RX on the client:
+  python3 tools/serial_cmd.py "cat /sys/kernel/debug/ieee80211/phy0/mwlwifi/fixed_rate"
+  ```
+  - Extract `Q5.bin` / `E5.bin` from the Cisco IOS archive to compare against `dts/cisco-3702i.dts` power tables and check GPIO states (`0xe000fc00`) under Cisco IOS vs OpenWrt.
+
+### 5.2 Roadblock #2: 2.4 GHz (`mwl8k`) TX-Ring Drain Deadlock (`waiting for tx rings to drain (82 -> 20 pkts)`)
+- **What's Failing:**
+  When `mwl8k` attempts to start an A-MPDU BlockAck stream on AP firmware (`7.4.0.9`), `dmesg` logs:
+  ```text
+  [  431.389570] ieee80211 phy1: Started stream for 16:3f:13:46:ec:97 0
+  [  441.499131] ieee80211 phy1: waiting for tx rings to drain (82 -> 20 pkts)
+  [  446.675836] ieee80211 phy1: Created a BA stream for 16:3f:13:46:ec:97 : tid 0
+  ```
+  During those 15 seconds (`431.38s` → `446.67s`), TCP throughput drops to **`0.00 bits/sec`** (`Broken pipe`).
+- **Why:**
+  - In `driver/mwl8k/mwl8k.c`, `mwl8k_txq_xmit()` sets `stream->state = AMPDU_STREAM_NEW` and calls `ieee80211_start_tx_ba_session()`.
+  - `mac80211` calls `mwl8k_ampdu_action(IEEE80211_AMPDU_TX_START)`, which sets `stream->state = AMPDU_STREAM_IN_PROGRESS` and calls `mwl8k_check_ba()` → `mwl8k_post_pervif_cmd()` → **`mwl8k_fw_lock()`**.
+  - `mwl8k_fw_lock()` calls `ieee80211_stop_queues(hw)` and `mwl8k_tx_wait_empty(hw)`, waiting up to 15 seconds for all TX rings (`pending_tx_pkts`) to hit `0`.
+  - Meanwhile, any packet arriving in `mwl8k_txq_xmit()` while `stream->state == AMPDU_STREAM_IN_PROGRESS` is **unconditionally dropped** (`Cannot send packet while ADDBA dialog is underway`), and the 20 packets already in the hardware TX ring stall waiting for `mwl8k_tx_start(priv)` or BlockAck window setup!
+- **Concrete Next Troubleshooting Actions:**
+  1. **Option A (Fastest — Clean HT20 `MCS 15` without ADDBA stalls):** Gate automatic `mwl8k_add_stream()` in `mwl8k_txq_xmit()` (`driver/mwl8k/mwl8k.c:2040`) behind a module parameter `ap_tx_ampdu=0` (default off on AP firmware) so 2.4 GHz runs at `MCS 15` (`130 MBit/s`) without ever triggering `mwl8k_fw_lock()` mid-stream.
+  2. **Option B (Fix `MWL8K_CMD_BASTREAM` locking):** Allow `MWL8K_CMD_BASTREAM` (`mwl8k_check_ba` / `mwl8k_create_ba`) to post the firmware command under `mutex_lock(&priv->fw_mutex)` **without** calling `mwl8k_tx_wait_empty(hw)` (matching `mwlwifi`, which never drains TX rings for `HOSTCMD_CMD_BASTREAM`).
+
+### 5.3 Roadblock #3: `p1023_fman_im.c` Single-Copy Bounce Buffers & 15% UDP Burst Tail-Drops
+- **What's Failing:**
+  During the 300 Mbps UDP download (`task-1090`), `19,337` of `128,053` datagrams (`15%`) were still dropped at `eth0`, and `CPU0` + `CPU1` spent `26.0` core-seconds in `softirq` over the 20s test suite.
+- **Why:**
+  `driver/p1023_fman_im.c` still copies every RX frame (`skb_put_data` from `priv->rx_bufs`) and every TX frame (`skb_copy_from_linear_data` into `priv->tx_bufs`), and relies on a `100 µs` `hrtimer` instead of zero-copy `dma_map_single()` skb rings.
+- **Concrete Next Troubleshooting Actions:**
+  1. **Zero-Copy TX (`p1023_start_xmit`):** Map `skb->data` directly via `dma_map_single(&priv->pdev->dev, skb->data, len, DMA_TO_DEVICE)`, store `skb` in `priv->tx_skbs[idx]`, and unmap + `dev_consume_skb_any()` in `p1023_reclaim_tx()`.
+  2. **Zero-Copy RX (`p1023_napi_poll`):** Pre-populate `priv->rx_skbs[0..511]` with `netdev_alloc_skb(ndev, PKT_BUF_SIZE + 64)` (64-byte aligned for FMan DMA), map with `dma_map_single(..., DMA_FROM_DEVICE)`, and on RX unmap and pass the `skb` directly to `napi_gro_receive()` while refilling the slot with a fresh `skb`.
+
+---
+
+## 6. Standard Verification Command Suite
+
 ```bash
-# 1. Build modules (p1023_fman_im.ko, mwlwifi.ko, mwl8k.ko) and repack /home/leifdavisson/Downloads/openwrt-3702i.bin
-# 2. Bounce PoE and TFTP RAM-boot openwrt-3702i.bin
-# 3. Verify wlp9s0 power_save is off and run benchmarks:
+# 1. Build modules + 2-CPU SMP image (/home/leifdavisson/Downloads/openwrt-3702i.bin)
+python3 tools/repack_openwrt_image.py --output /home/leifdavisson/Downloads/openwrt-3702i.bin
+
+# 2. Verify 2 CPUs + RPS + wlp9s0 power_save off (21 dBm), then run 5 GHz & 2.4 GHz suite:
+python3 tools/serial_cmd.py "grep -E 'processor|bogomips' /proc/cpuinfo; cat /proc/interrupts"
 iw dev wlp9s0 info
 iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 5 -R
 iperf3 -c 192.168.1.245 -B 192.168.1.244 -P 4 -t 5 -R
 iperf3 -c 192.168.1.245 -B 192.168.1.244 -P 4 -t 5
-iperf3 -c 192.168.1.245 -B 192.168.1.244 -u -b 250M -t 5 -R
+iperf3 -c 192.168.1.245 -B 192.168.1.244 -u -b 300M -t 5 -R
 ```
