@@ -2221,6 +2221,7 @@ static int mwl8k_post_cmd(struct ieee80211_hw *hw, struct mwl8k_cmd_pkt *cmd)
 	unsigned long timeout = 0;
 	u8 buf[32];
 	u32 bitmap = 0;
+	bool no_drain = (cmd->code == cpu_to_le16(MWL8K_CMD_BASTREAM));
 
 	wiphy_dbg(hw->wiphy, "Posting %s [%d]\n",
 		  mwl8k_cmd_name(cmd->code, buf, sizeof(buf)), cmd->macid);
@@ -2230,9 +2231,14 @@ static int mwl8k_post_cmd(struct ieee80211_hw *hw, struct mwl8k_cmd_pkt *cmd)
 	 * Enable these stopped BSSes after completion of the commands
 	 */
 
-	rc = mwl8k_fw_lock(hw);
-	if (rc)
-		return rc;
+	if (no_drain) {
+		if (mutex_lock_interruptible(&priv->fw_mutex))
+			return -ERESTARTSYS;
+	} else {
+		rc = mwl8k_fw_lock(hw);
+		if (rc)
+			return rc;
+	}
 
 	if (priv->ap_fw && priv->running_bsses) {
 		switch (le16_to_cpu(cmd->code)) {
@@ -2329,7 +2335,10 @@ exit:
 	if (bitmap)
 		mwl8k_enable_bsses(hw, true, bitmap);
 
-	mwl8k_fw_unlock(hw);
+	if (no_drain)
+		mutex_unlock(&priv->fw_mutex);
+	else
+		mwl8k_fw_unlock(hw);
 
 	return rc;
 }
