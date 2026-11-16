@@ -19,6 +19,9 @@
 
 /dts-v1/;
 
+/* Secondary-core boot page + ePAPR spin table, installed by boot/smp before the kernel starts. */
+/memreserve/ 0x0ff00000 0x00001000;
+
 / {
 	model = "Cisco Aironet 3702i (AIR-CAP3702I)";
 	compatible = "cisco,ap3702i", "enterasys,ws-ap3710i", "fsl,P1020RDB", "fsl,P1020";
@@ -57,6 +60,8 @@
 			bus-frequency = <320000000>;
 			clock-frequency = <800000000>;
 			timebase-frequency = <40000000>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0x0ff00800>;
 		};
 	};
 
@@ -270,6 +275,8 @@
 			interrupts = <16 2>;
 			interrupt-map-mask = <0xf800 0 0 7>;
 			interrupt-map = <
+				/* P1023 routing: controller @a000 -> MPIC external IRQ 0..3.
+				 * INTA on IRQ 0 verified on hardware (mwl8k); B..D per SoC convention. */
 				0000 0x0 0x0 0x1 &mpic 0 2
 				0000 0x0 0x0 0x2 &mpic 1 2
 				0000 0x0 0x0 0x3 &mpic 2 2

@@ -262,7 +262,10 @@ insmod /lib/modules/5.15.167/cfg80211.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mac80211.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mwlwifi.ko 2>/dev/null || true
 insmod /lib/modules/5.15.167/mwl8k.ko 2>/dev/null || true
-(sleep 5; wifi up) >/dev/null 2>&1 &
+echo 1 > /proc/irq/17/smp_affinity 2>/dev/null || true
+echo 1 > /proc/irq/18/smp_affinity 2>/dev/null || true
+echo 1 > /sys/class/net/eth0/queues/rx-0/rps_cpus 2>/dev/null || true
+(sleep 5; wifi up; sleep 5; echo 2 > /sys/class/net/phy0-ap0/queues/rx-0/rps_cpus 2>/dev/null; echo 2 > /sys/class/net/phy1-ap0/queues/rx-0/rps_cpus 2>/dev/null) >/dev/null 2>&1 &
 exit 0
 """
     with open(os.path.join(ROOTFS_DIR, "etc/rc.local"), "w") as f:
@@ -385,8 +388,33 @@ boot_hook_add initramfs do_mount_initramfs_overlay
     wrapper_head_mod[dtb_offset : dtb_offset + len(dtb_bytes)] = dtb_bytes
 
     # Combine wrapper head + compressed payload
-    final_raw = bytes(wrapper_head_mod) + bytes(compressed_payload)
+    final_raw = bytearray(bytes(wrapper_head_mod) + bytes(compressed_payload))
     assert len(final_raw) == 7001092
+
+    # 10b. Build and attach boot/smp pre-kernel stage (brings up CPU 1 + L2 cache + HID1[ABE])
+    smp_src = os.path.join(PROJECT_DIR, "boot/smp")
+    if os.path.isdir(smp_src):
+        print("[*] Building and attaching boot/smp pre-kernel stage (CPU 1 spin-table)...")
+        smp_out = os.path.join(WORK_DIR, "smp")
+        os.makedirs(smp_out, exist_ok=True)
+        cross = os.path.join(PROJECT_DIR, "sdk/staging_dir/toolchain-powerpc_8548_gcc-12.3.0_musl/bin/powerpc-openwrt-linux-musl-")
+        stage_off = 0x6B0000
+        load_addr = 0x01500000
+        stage_addr = load_addr + stage_off
+        wrapper_entry = load_addr + 0x340
+        run(f"{cross}gcc -c -mcpu=8548 -o {smp_out}/bootpg.o {smp_src}/bootpg.S")
+        run(f"{cross}ld -Ttext=0xfffff000 -o {smp_out}/bootpg.elf {smp_out}/bootpg.o")
+        run(f"{cross}objcopy -O binary {smp_out}/bootpg.elf {smp_out}/bootpg.bin")
+        assert os.path.getsize(f"{smp_out}/bootpg.bin") == 4096
+        run(f"{cross}gcc -c -mcpu=8548 -DWRAPPER_ENTRY={wrapper_entry:#x} -Wa,-I{smp_out} -o {smp_out}/shim.o {smp_src}/shim.S")
+        run(f"{cross}ld -Ttext={stage_addr:#x} -o {smp_out}/shim.elf {smp_out}/shim.o")
+        run(f"{cross}objcopy -O binary {smp_out}/shim.elf {smp_out}/shim.bin")
+        with open(f"{smp_out}/shim.bin", "rb") as f:
+            smp_stage = f.read()
+        assert struct.unpack(">I", final_raw[:4])[0] == 0x48000340
+        final_raw[:4] = struct.pack(">I", 0x48000000 | stage_off)
+        final_raw = final_raw.ljust(stage_off, b"\x00") + smp_stage
+        print(f"[+] Attached SMP stage ({len(smp_stage)} bytes) at {stage_addr:#010x}")
 
     with open(OUTPUT_RAW, "wb") as f:
         f.write(final_raw)

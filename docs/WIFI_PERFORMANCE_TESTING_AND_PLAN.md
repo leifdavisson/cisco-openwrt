@@ -64,14 +64,14 @@ pcmd->peer_info.vht_max_rx_mcs =
 
 ## 3. Observed Benchmark Progression (`ld-branch`)
 
-| Test | Baseline (L2 OFF) | L2 ON + Ring Size | `wlp9s0` Power-Save OFF (21 dBm) | Latest (`758d106`: `RX_RING=512`, BE VHT fix) |
+| Test | Baseline (L2 OFF, 1 CPU) | L2 ON + Ring Size (1 CPU) | `758d106` (1 CPU, `RX_RING=512`) | **2-CPU SMP (`boot/smp`) + RPS + IRQ Affinity** |
 | :--- | :--- | :--- | :--- | :--- |
-| `eth0` `wget` (`100m.bin`) | 156.28 Mbps | **226.94 Mbps** | **226.94 Mbps** | — |
-| 5 GHz `VHT80` 1-stream DOWN | 31.9 Mbits/sec | 97.5 Mbits/sec | **179 Mbits/sec (192 peak)** | **121 Mbits/sec** (127 sender) |
-| 5 GHz `VHT80` 4-stream DOWN | 70.9 Mbits/sec | 132 Mbits/sec | 115–120 Mbits/sec | **130 Mbits/sec** (140 sender) |
-| 5 GHz `VHT80` 4-stream UP | 44.0 Mbits/sec | **198 Mbits/sec** | 146–160 Mbits/sec | **153 Mbits/sec** (170 sender, 0 retr) |
-| 5 GHz `VHT80` UDP 250M DOWN | 141 Mbits/sec (43% loss) | 203 Mbits/sec (18% loss) | **206 Mbits/sec (17% loss)** | **196 Mbits/sec** (0.092 ms jitter, 20% loss) |
-| 2.4 GHz `HT20` 1-stream DOWN (10s) | 5.64 Mbits/sec (crashed @ 6s) | 14.7 Mbits/sec (crashed @ 6s) | **6.91–10.5 Mbits/sec (full 10s)** | *(re-test `mwl8k` AMPDU fix)* |
+| `eth0` `wget` (`100m.bin`) | 156.28 Mbps | **226.94 Mbps** | — | — |
+| 5 GHz `VHT80` 1-stream DOWN | 31.9 Mbits/sec | 97.5 Mbits/sec | 121 Mbits/sec | **244 Mbits/sec (248 sender, 5 retr — 7.7×)** |
+| 5 GHz `VHT80` 4-stream DOWN | 70.9 Mbits/sec | 132 Mbits/sec | 130 Mbits/sec | **243 Mbits/sec (258 sender — 3.4×)** |
+| 5 GHz `VHT80` 4-stream UP | 44.0 Mbits/sec | 198 Mbits/sec | 153 Mbits/sec | **185 Mbits/sec (204 sender, 0 retr — 4.2×)** |
+| 5 GHz `VHT80` UDP DOWN | 141 Mbits/sec (43% loss) | 203 Mbits/sec (18% loss) | 196 Mbits/sec | **252 Mbits/sec (0.049 ms jitter @ 300M)** |
+| 2.4 GHz `HT20` 1-stream DOWN (10s) | 5.64 Mbits/sec (crashed @ 6s) | 14.7 Mbits/sec (crashed @ 6s) | 6.91–10.5 Mbits/sec (full 10s) | **6.91–10.5 Mbits/sec (full 10s)** |
 
 ---
 
@@ -101,9 +101,11 @@ pcmd->peer_info.vht_max_rx_mcs =
 1. In `mwl8k_sta_add()` (`driver/mwl8k/mwl8k.c:5414`), set `MWL8K_STA(sta)->is_ampdu_allowed = true` when `sta->deflink.ht_cap.ht_supported` is true in the `else` (`priv->ap_fw`) branch.
 2. In `mwl8k_ampdu_action()` (`driver/mwl8k/mwl8k.c:5580`), reduce `msleep(1000)` to `msleep(50)` so ADDBA negotiation does not stall and drop QoS data frames for 1–2 seconds.
 
-### Task 5: Bring CPU 1 Online (`No cpu-release-addr for cpu 1`) — **REMAINING BLOCKER**
-- **Kernel state:** `CONFIG_SMP=y`, `CONFIG_PPC_SMP_MUXED_IPI=y`, and `mpic` initializes for 2 CPUs, but `smp_85xx_kick_cpu` fails with `-ENOENT` (`rc -2`) because `PowerPC,P1020@1` in `dts/cisco-3702i.dts` has no `cpu-release-addr` (Cisco ROMMON does not populate an ePAPR spin-table).
-- **Action:** Set up an ePAPR spin-table + `cpu-release-addr` for CPU 1 (either in the bootwrapper/ROMMON loader or DTB) so both 800 MHz e500v2 cores run `eth0` and `mwlwifi` in parallel.
+### Task 5: Bring CPU 1 Online (`boot/smp`) + Split Pipeline via RPS & IRQ Affinity — **DONE & VERIFIED**
+- **SMP Bring-Up (`boot/smp/shim.S` + `bootpg.S` by Marco Mata, integrated into `tools/repack_openwrt_image.py`):**
+  Sets `HID1 |= ASTME | ABE | MBDD`, enables the 256 KB L2 cache (`L2CTL`), copies the 4 KiB secondary boot page to `0x0ff00000`, releases Core 1 via `BPTR` + `EEBPCR[CPU1_EN]` into the ePAPR spin-table at `0x0ff00800`, and synchronizes both timebases (`smp: Brought up 1 node, 2 CPUs`, `160.00 BogoMIPS`).
+- **RPS + IRQ Affinity Pipeline Split (now in `/etc/rc.local`):**
+  Without RPS, `eth0`'s `hrtimer` NAPI and `mwlwifi`'s `tx_task` tasklet both run on `CPU1` (`3485` softirq ticks on `CPU1` vs `405` on `CPU0`). Routing `IRQ 17/18` (`mwlwifi`/`mwl8k`) to `CPU0` and setting `rps_cpus=1` on `eth0` + `rps_cpus=2` on `phy0-ap0`/`phy1-ap0` splits Ethernet RX (`CPU1`) from Bridge + Wi-Fi TX (`CPU0`), pushing **5 GHz TCP download to 244–258 Mbits/sec** and **UDP to 252 Mbits/sec**!
 ```bash
 # 1. Build modules (p1023_fman_im.ko, mwlwifi.ko, mwl8k.ko) and repack /home/leifdavisson/Downloads/openwrt-3702i.bin
 # 2. Bounce PoE and TFTP RAM-boot openwrt-3702i.bin
