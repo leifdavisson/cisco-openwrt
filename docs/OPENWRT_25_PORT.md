@@ -25,7 +25,7 @@ this document only covers what was needed to move from 23.05.5 to 25.12.6 and wh
 | `radio_reset.ko` | **works**, builds unmodified | both endpoints enumerate |
 | 5 GHz 88W8864 (`mwlwifi`) | **registers, scans** after a 4-line mac80211 fix (§4) | `iw phy`, passive scan: 16 BSS |
 | 2.4 GHz 88W8764 (`mwl8k`) | **registers** after the same fix; **scan returns 0 BSS** | see §4.2, same open IRQ item as on 23.05 |
-| AP mode / client traffic on 25.12.6 | **not tested** | — |
+| AP mode on 25.12.6 | **beacons on both bands**; 2.4 GHz fails to install the group key; **no client test yet** | client scan, hostapd log (§4.2) |
 | Boot from `flash:`, unattended cold boot | **works** (§6) | PoE cycle without console: ping after 114 s |
 | JFFS2 overlay persistence | **works** across 2 power cycles (§6) | file + `uci commit` survive |
 
@@ -183,7 +183,15 @@ ieee80211 phy1: 88w8764 v7, a8800f500000, AP firmware 7.4.0.9
   it has to be set to `2g` by hand.
 * Radio MAC addresses come up as `b0:80:0f:50:ff:ff` / `a8:80:0f:50:00:00` on this unit. They look
   like placeholders rather than the per-unit radio MACs — not investigated.
-* AP mode, association and throughput were not tested on 25.12.6.
+* **AP mode, beacons only.** With `country 'LU'`, WPA2-PSK, `radio0` on channel 36 / VHT80 and
+  `radio1` forced to `band '2g'`, channel 6 / HT20, hostapd reports `AP-ENABLED` on both and a
+  nearby client sees both SSIDs in every scan (BSSIDs = the placeholder radio MACs above).
+  `/proc/interrupts`: `mwlwifi` ≈60/s, `mwl8k` stays at 0.
+* On every start the 2.4 GHz interface logs
+  `phy1-ap0: failed to set key (1, ff:ff:ff:ff:ff:ff) to hardware (-110)` — the group key install
+  times out, so WPA2 traffic on 2.4 GHz is not expected to work until the interrupt is fixed.
+* **No client has associated yet** on either band: association, WPA handshake, traffic and
+  long-run stability on 25.12.6 are untested.
 
 ---
 
@@ -351,6 +359,7 @@ to the AP, or use a single-port server (`dnsmasq --enable-tftp --tftp-single-por
 | `tools/xmodem_boot.py` | new: RAM boot through the console cable |
 | `driver/mwl8k/mwl8k.c`, `driver/mwl8k/Makefile` | channel-context emulation ops (guarded) |
 | `driver/mwlwifi-local.patch` | same two additions, patch regenerated against `db97edf` |
+| `tools/rommon_clean_flash.py` | new: remove the Cisco software from `flash:` in ROMMON (ran on a 2602i; list-only by default) |
 | `tools/build_image.py` | new: parameterised builder that produced the verified 25.12.6 image (static IP or DHCP, MAC hook, overlay, no sysupgrade) |
 | `tests/test_xmodem_boot.py` | new: runs `xmodem_boot.py` (RAM boot and `--install`) against a simulated ROMMON on a pty |
 | `.github/workflows/ci.yml` | `pyserial` added so that test runs in CI |

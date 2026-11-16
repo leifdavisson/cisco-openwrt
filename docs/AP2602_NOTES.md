@@ -75,8 +75,22 @@ File "flash:/openwrt-2602i.bin" uncompressed and installed, entry point: 0x16000
 | `sysupgrade -T` | refused by the image, as intended |
 | Cisco software | untouched; the stock `BACKUPBOOT` recovery entry is still in the ROMMON environment |
 
-The image is 8 208 384 bytes on `flash:`, which leaves roughly 0.4 MiB free (computed from the
-8 592 896 bytes that were free before; not re-read).
+### 2.3 Standalone: Cisco software removed
+
+With the install proven, everything Cisco was deleted from `flash:` in ROMMON
+(`tools/rommon_clean_flash.py --keep openwrt-2602i.bin env_vars private-multiple-fs --delete`:
+IOS image directory, recovery image, event logs, saved CAPWAP configuration — 23.2 MiB in about
+100 files). A raw dump of the 32 MiB chip was taken from Linux beforehand.
+
+| | Before | After |
+|---|---|---|
+| Free on `flash:` | 513 024 bytes | 23 776 256 bytes |
+| Files in `flash:/` | 18 entries | `openwrt-2602i.bin`, `env_vars`, `private-multiple-fs` |
+| `boot` from ROMMON | — | OpenWrt up, ping after ≈115 s |
+| Unattended PoE cycle | — | back on the network 155 s after power-on |
+
+`BACKUPBOOT` / `AP_IMAGE_RCV` in the ROMMON environment still name the deleted recovery image;
+they were left alone. This step cannot be undone without a Cisco image from elsewhere.
 
 ## 3. What does not work yet
 
@@ -106,8 +120,9 @@ The image is 8 208 384 bytes on `flash:`, which leaves roughly 0.4 MiB free (com
    *free* flashfs blocks, and all of them were gone once the 8.2 MiB image had been written. Do not
    build a MAC lookup on a whole-flash scan. Two 2602i units on one LAN will collide until the
    SEEPROM is read.
-4. **Flash is nearly full.** With ≈0.4 MiB left a second image cannot be stored next to the first;
-   an update means deleting `openwrt-2602i.bin` in ROMMON first (or the Cisco recovery image).
+4. **Flash space next to the Cisco software.** With IOS and the recovery image in place only
+   0.5 MiB stays free after the install, so a second image cannot be stored next to the first.
+   Removing the Cisco software (§2.3) lifts this.
 
 ## 4. Suggested next steps
 

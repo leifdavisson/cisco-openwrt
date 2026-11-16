@@ -90,6 +90,18 @@ Status on OpenWrt 25.12.6: the 5 GHz radio (`radio0`) is detected and scans; AP 
 the 2.4 GHz radio (`radio1`) are not confirmed yet — see the status table in
 [OPENWRT_25_PORT.md](OPENWRT_25_PORT.md). On 23.05.5 both radios work as access points.
 
+## Optional: remove the Cisco software
+
+Once OpenWrt boots reliably you can free the flash for a standalone AP. This is permanent — there
+is no way back to Cisco IOS afterwards unless you have an image of your own. At the `ap:` prompt:
+
+```bash
+python3 tools/rommon_clean_flash.py --keep openwrt-3702i.bin env_vars private-multiple-fs            # list only
+python3 tools/rommon_clean_flash.py --keep openwrt-3702i.bin env_vars private-multiple-fs --delete
+```
+
+Never delete `env_vars` (it holds `BOOT`) or your OpenWrt image.
+
 ## Going back to Cisco IOS
 
 Power-cycle with the console attached, press `ESC` during boot to reach `ap:`, then:
