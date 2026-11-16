@@ -44,6 +44,12 @@ RELEASES = {
                irf_off=8849408, irf_max=3785548, size_off=0xC0CB50, load=0x01500000),
 }
 
+# Per-model differences. "overlay": a JFFS2 rootfs_data partition exists in the device tree.
+MODELS = {
+    "3702i": dict(dtb="dts/cisco-3702i.dtb", overlay=True, radios=("mwlwifi", "mwl8k")),   # 88W8864 + 88W8764
+    "2602i": dict(dtb="dts/cisco-2602i.dtb", overlay=False, radios=("mwl8k",)),            # 2 x 88W8764
+}
+
 # Modules of the WS-AP3710i image that this board cannot use; removed to make room.
 UNUSED_MODULES = ("ath9k", "ath9k_hw", "ath9k_common", "ath", "usbcore", "ehci-hcd", "ehci-platform",
                   "ehci-fsl", "usb-common", "fsl-mph-dr-of", "ppp_async", "ppp_generic", "pppoe", "pppox", "slhc")
@@ -128,15 +134,16 @@ config odhcpd 'odhcpd'
 """
 
 
-def rc_local(kver: str, wifi: bool) -> str:
-    text = f"""# Cisco 3702i: fall back to loading the Ethernet driver by hand if kmodloader did not.
+def rc_local(kver: str, radios: tuple) -> str:
+    text = f"""# Cisco Aironet: fall back to loading the Ethernet driver by hand if kmodloader did not.
 [ -d /sys/class/net/eth0 ] || {{
     insmod /lib/modules/{kver}/marvell.ko 2>/dev/null
     insmod /lib/modules/{kver}/p1023_fman_im.ko 2>/dev/null
     /etc/init.d/network reload
 }}
 """
-    if wifi:
+    if radios:
+        drivers = "".join(f"insmod /lib/modules/{kver}/{name}.ko 2>/dev/null\n" for name in radios)
         text += f"""
 # Release the radios from reset, then load their drivers (interfaces stay disabled until configured).
 modprobe mac80211 2>/dev/null
@@ -144,8 +151,22 @@ insmod /lib/modules/{kver}/radio_reset.ko 2>/dev/null
 for d in 9000:01:00.0 a000:03:00.0; do
     [ -e /sys/bus/pci/devices/$d/enable ] && echo 1 > /sys/bus/pci/devices/$d/enable
 done
-insmod /lib/modules/{kver}/mwlwifi.ko 2>/dev/null
-insmod /lib/modules/{kver}/mwl8k.ko 2>/dev/null
+{drivers}
+# Some units report an invalid radio address (2602i: multicast bit set, hostapd cannot start on it).
+# Give those interfaces a locally administered address derived from the Ethernet MAC.
+(
+    sleep 25
+    wifi config
+    mid=$(cut -d: -f2-5 /sys/class/net/eth0/address)
+    n=0
+    for m in /sys/class/ieee80211/phy*/macaddress; do
+        [ -e "$m" ] || continue
+        o=$(cut -c1-2 "$m")
+        [ $((0x$o & 1)) -eq 1 ] && uci -q set wireless.default_radio$n.macaddr="06:$mid:0$n"
+        n=$((n + 1))
+    done
+    uci -q commit wireless
+) &
 """
     return text + "\nexit 0\n"
 
@@ -161,14 +182,15 @@ def main() -> int:
     ap.add_argument("--mask", default="255.255.255.0")
     ap.add_argument("--gw")
     ap.add_argument("--dns")
-    ap.add_argument("--hostname", default="cisco3702i")
-    ap.add_argument("--wifi", action="store_true", help="include mwlwifi/mwl8k and their firmware")
+    ap.add_argument("--hostname", help="default: cisco<model>")
+    ap.add_argument("--model", choices=sorted(MODELS), default="3702i")
+    ap.add_argument("--wifi", action="store_true", help="include the model's Wi-Fi drivers and firmware")
     ap.add_argument("--no-overlay", action="store_true", help="plain initramfs, nothing saved to flash")
     ap.add_argument("--pubkey", help="install this SSH public key and disable password logins")
     ap.add_argument("--drivers", default=os.path.join(REPO, "driver"), help="directory with the built .ko files")
     ap.add_argument("--fw-8864", default="/tmp/mwl_fw/lib/firmware/mwlwifi/88W8864.bin")
     ap.add_argument("--fw-8764", default=os.path.join(REPO, "firmware_dl/fmimage_8764_ap-1.fw"))
-    ap.add_argument("--dtb", default=os.path.join(REPO, "dts/cisco-3702i.dtb"))
+    ap.add_argument("--dtb", help="default: the model's tree in dts/")
     ap.add_argument("--work", default="/tmp/cisco3702i_build")
     ap.add_argument("--out", default=os.path.expanduser("~/Downloads/openwrt-3702i.bin"))
     args = ap.parse_args()
@@ -176,6 +198,11 @@ def main() -> int:
         ap.error("--ip needs --gw")
 
     c = RELEASES[args.release]
+    model = MODELS[args.model]
+    args.dtb = args.dtb or os.path.join(REPO, model["dtb"])
+    args.hostname = args.hostname or f"cisco{args.model}"
+    radios = model["radios"] if args.wifi else ()
+    overlay = model["overlay"] and not args.no_overlay
     kver, work = c["kver"], args.work
     rootfs = os.path.join(work, "rootfs")
     state = os.path.join(work, "fakeroot.state")
@@ -216,16 +243,18 @@ def main() -> int:
     for entry in os.listdir(autoload):
         if entry.split("-", 1)[-1] in UNUSED_AUTOLOAD or entry in UNUSED_AUTOLOAD:
             os.remove(os.path.join(autoload, entry))
-    modules = [os.path.join(kdir, "drivers/net/phy/marvell.ko"),
+    modules = [os.path.join(kdir, "drivers/net/phy/marvell.ko"), os.path.join(args.drivers, "l2cache.ko"),
                os.path.join(args.drivers, "p1023_fman_im.ko"), os.path.join(args.drivers, "radio_reset.ko")]
-    if args.wifi:
-        modules += [os.path.join(args.drivers, "mwlwifi/mwlwifi.ko"), os.path.join(args.drivers, "mwl8k/mwl8k.ko")]
-        for src, sub in ((args.fw_8864, "mwlwifi"), (args.fw_8764, "mwl8k")):
-            os.makedirs(os.path.join(rootfs, "lib/firmware", sub), exist_ok=True)
-            shutil.copy(src, os.path.join(rootfs, "lib/firmware", sub))
+    modules += [os.path.join(args.drivers, f"{name}/{name}.ko") for name in radios]
+    for name, src in (("mwlwifi", args.fw_8864), ("mwl8k", args.fw_8764)):
+        if name in radios:
+            os.makedirs(os.path.join(rootfs, "lib/firmware", name), exist_ok=True)
+            shutil.copy(src, os.path.join(rootfs, "lib/firmware", name))
     for module in modules:
         run(strip, "--strip-unneeded", "-o", os.path.join(moddir, os.path.basename(module)), module)
     write(os.path.join(autoload, "20-p1023-fman"), "marvell\np1023_fman_im\n")
+    # The L2 cache is off after ROMMON (U-Boot would have enabled it): switch it on as early as possible.
+    write(os.path.join(rootfs, "etc/modules-boot.d/00-l2cache"), "l2cache enable=1\n")
 
     # 3. configuration
     write(os.path.join(rootfs, "etc/config/network"), network_config(args))
@@ -239,7 +268,7 @@ def main() -> int:
         os.chmod(os.path.join(rootfs, "etc/dropbear/authorized_keys"), 0o600)
         write(os.path.join(rootfs, "etc/config/dropbear"),
               "config dropbear\n\toption PasswordAuth 'off'\n\toption RootPasswordAuth 'off'\n\toption Port '22'\n")
-    write(os.path.join(rootfs, "etc/rc.local"), rc_local(kver, args.wifi), 0o755)
+    write(os.path.join(rootfs, "etc/rc.local"), rc_local(kver, radios), 0o755)
 
     # 4. board quirks
     write(os.path.join(rootfs, "lib/preinit/09_cisco_fman_mac"), MAC_HOOK)
@@ -249,7 +278,7 @@ def main() -> int:
         with open(banner, encoding="utf-8") as f:
             text = f.read()
         write(banner, text.replace('boardinfo.rootfs_type == "initramfs"', "false"))
-    if not args.no_overlay:
+    if overlay:
         with open(os.path.join(REPO, "tools/repack_openwrt_image.py"), encoding="utf-8") as f:
             hook = re.search(r'preinit_overlay = """(.*?)"""', f.read(), re.S)
         if hook is None:

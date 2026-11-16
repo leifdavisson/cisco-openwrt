@@ -2307,7 +2307,8 @@ static int mwl8k_post_cmd(struct ieee80211_hw *hw, struct mwl8k_cmd_pkt *cmd)
 	} else {
 		int ms;
 
-		ms = MWL8K_CMD_TIMEOUT_MS - jiffies_to_msecs(timeout);
+		/* the IRQ wait above is 200 ms (then OPC_DONE polling), not MWL8K_CMD_TIMEOUT_MS */
+		ms = 200 - jiffies_to_msecs(timeout);
 
 		rc = cmd->result ? -EINVAL : 0;
 		if (rc)
@@ -5767,6 +5768,8 @@ static const struct pci_device_id mwl8k_pci_id_table[] = {
 	{ PCI_VDEVICE(MARVELL, 0x2a43), .driver_data = MWL8366, },
 	{ PCI_VDEVICE(MARVELL, 0x2b36), .driver_data = MWL8764, },
 	{ PCI_VDEVICE(MARVELL, 0xb024), .driver_data = MWL8764, },
+	{ PCI_VDEVICE(MARVELL, 0x8650), .driver_data = MWL8764, },	/* Cisco AIR-CAP2602I, 5 GHz radio */
+	{ PCI_VDEVICE(MARVELL, 0x8624), .driver_data = MWL8764, },	/* Cisco AIR-CAP2602I, 2.4 GHz radio */
 	{ },
 };
 MODULE_DEVICE_TABLE(pci, mwl8k_pci_id_table);

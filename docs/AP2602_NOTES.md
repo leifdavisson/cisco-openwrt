@@ -1,8 +1,8 @@
 # Cisco Aironet 2602i — first assessment
 
-**Contribution by:** Marco Mata, 2026-11-15/16. **Status: boots and stays installed, wired only.**
-OpenWrt 25.12.6 is installed on `flash:` of one test unit and survives a cold boot. There is no Wi-Fi
-driver, no saved-settings area and no per-unit MAC yet, so this is not a usable access point.
+**Contribution by:** Marco Mata, 2026-11-15/16. **Status: boots and stays installed; radios detected but untested as AP.**
+OpenWrt 25.12.6 is installed on `flash:` of one test unit and survives a cold boot. There is no
+saved-settings area and no per-unit MAC yet, and AP mode is untested, so this is not a usable access point.
 
 The 2602i belongs to the same Cisco `ap3g2` family as the 3702i documented in this repository and
 turned out to be close enough that the 3702i work carries over with a two-line device-tree change.
@@ -97,10 +97,14 @@ they were left alone. This step cannot be undone without a Cisco image from else
 
 ## 3. What does not work yet
 
-1. **Wi-Fi.** Neither `11ab:8650` nor `11ab:8624` is in a driver's ID table. IOS calls both radios
-   `8764`, so the candidate is `mwl8k` with the 88W8764 AP firmware plus two new PCI IDs — untested.
-   On the 3702i the 8764 path still relies on command polling and returns no scan results on 25.12.6,
-   so that item has to be solved first; it decides Wi-Fi on the 2602i entirely.
+1. **Wi-Fi is detected and receives, but is not tested as an access point.** With the two PCI IDs
+   added to `mwl8k` (as 88W8764) and the corrected interrupt routing (WIFI_PERFORMANCE.md §4) both
+   radios load the 88W8764 AP firmware and scan: `9000:01:00.0` (`11ab:8650`) is the 5 GHz radio
+   (6 BSS on 5 GHz), `a000:03:00.0` (`11ab:8624`) the 2.4 GHz one (31 BSS on 2.4 GHz).
+   Both report an invalid hardware address (`cb:23:…`, `c9:23:…` — multicast bit set), so an
+   interface cannot be brought up on it; the image assigns locally administered addresses
+   (`06:<eth0 bytes 2–5>:0N`) to the generated `wifi-iface` sections. As on the 3702i, `wifi config`
+   labels the 2.4 GHz radio `band '5g'`. No AP interface, association or traffic has been tried.
 2. **No saved settings.** Per-128 KiB-block scan of the 32 MiB chip from Linux (read-only), before the
    install:
 
@@ -127,9 +131,24 @@ they were left alone. This step cannot be undone without a Cisco image from else
    0.5 MiB stays free after the install, so a second image cannot be stored next to the first.
    Removing the Cisco software (§2.3) lifts this.
 
+### 2.4 Second image: Wi-Fi drivers, L2 cache, corrected interrupts
+
+`tools/build_image.py 25 --model 2602i --wifi …` was installed as `flash:/openwrt-2602i-v2.bin`
+next to the first image, `BOOT` switched, and after it had booted (L2 cache enabled by
+`modules-boot.d`, `phy0` and `phy1` present, radios disabled by default) the first image was
+deleted in ROMMON:
+
+```text
+ap: dir flash:
+2    -rwx  8208384   <date>               openwrt-2602i-v2.bin
+3    -rwx  365       <date>               env_vars
+21   -rwx  11288     <date>               private-multiple-fs
+23776256 bytes available (8221696 bytes used)
+```
+
 ## 4. Suggested next steps
 
 1. Read the SEEPROM cookie over I2C and feed the MAC to `p1023_fman_im` (`mac_str=`).
-2. Solve the `mwl8k` interrupt line on the 3702i, then try `mwl8k` with IDs `0x8650` / `0x8624`.
+2. Test AP mode on both 2602i radios with a client (they load and scan since the interrupt fix).
 3. Find the second flash region (compare ROMMON `flashfs[1]` geometry with the eLBC chip-selects)
    and put a `rootfs_data` overlay there.

@@ -175,7 +175,7 @@ ieee80211 phy1: 88w8764 v7, a8800f500000, AP firmware 7.4.0.9
 
 * **5 GHz (`phy0`)**: passive scan returns 16 BSS on channels 60–108 with plausible levels
   (−68 … −98 dBm); `/proc/interrupts` shows `OpenPIC 4 Level mwlwifi` counting.
-* **2.4 GHz (`phy1`)**: registers and loads its firmware; every firmware command still logs
+* **2.4 GHz (`phy1`)** — *superseded: the cause was the interrupt routing, fixed in WIFI_PERFORMANCE.md §4.* As first observed: registers and loads its firmware; every firmware command still logs
   `took 9990 ms` (the `OPC_DONE` polling fallback), and a scan completes in 20 s with **0 BSS**.
   This looks like the already-open "mwl8k hardware IRQ pin" item rather than something new in 25,
   but it was **not compared against 23.05.5 on this unit**, so treat it as unconfirmed.
@@ -363,6 +363,9 @@ to the AP, or use a single-port server (`dnsmasq --enable-tftp --tftp-single-por
 | `tools/build_image.py` | new: parameterised builder that produced the verified 25.12.6 image (static IP or DHCP, MAC hook, overlay, no sysupgrade) |
 | `tests/test_xmodem_boot.py` | new: runs `xmodem_boot.py` (RAM boot and `--install`) against a simulated ROMMON on a pty |
 | `.github/workflows/ci.yml` | `pyserial` added so that test runs in CI |
+| `driver/l2cache.c` | new: enables the L2 cache that ROMMON leaves off (see WIFI_PERFORMANCE.md) |
+| `dts/*.dts` | `pcie@e000a000` INTx → MPIC 0–3 (was 5/6/11/7): gives `mwl8k` its interrupt |
+| `docs/WIFI_PERFORMANCE.md` | new: throughput measurements, the two fixes, remaining limits |
 | `docs/QUICK_INSTALL.md` | new: short install guide |
 | `docs/OPENWRT_25_PORT.md` | this document |
 | `README.md` | status, quick-install pointer, sysupgrade warning |

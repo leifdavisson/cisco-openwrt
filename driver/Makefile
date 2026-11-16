@@ -3,6 +3,7 @@ obj-m += p1023_fman_im.o
 obj-m += pci_diag.o
 obj-m += radio_reset.o
 obj-m += atmu_diag.o
+obj-m += l2cache.o
 ccflags-y += -DCONFIG_FMAN_UCODE_EMBEDDED
 
 REPO_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
