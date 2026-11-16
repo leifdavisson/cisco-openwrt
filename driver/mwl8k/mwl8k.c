@@ -2262,7 +2262,7 @@ static int mwl8k_post_cmd(struct ieee80211_hw *hw, struct mwl8k_cmd_pkt *cmd)
 		regs + MWL8K_HIU_H2A_INTERRUPT_EVENTS);
 
 	timeout = wait_for_completion_timeout(&cmd_wait,
-				msecs_to_jiffies(200));
+				msecs_to_jiffies(MWL8K_CMD_TIMEOUT_MS));
 
 	if (!timeout) {
 		int p;
@@ -2854,6 +2854,9 @@ static int
 mwl8k_set_radio_preamble(struct ieee80211_hw *hw, bool short_preamble)
 {
 	struct mwl8k_priv *priv = hw->priv;
+
+	if (priv->radio_on && priv->radio_short_preamble == short_preamble)
+		return 0;
 
 	priv->radio_short_preamble = short_preamble;
 
