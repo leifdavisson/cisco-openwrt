@@ -39,9 +39,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RELEASES = {
     # load = link address of that release's simpleImage wrapper (tools/wrapper_info.py)
     "25": dict(gcc="gcc-14.3.0", kver="6.12.112", xz_off=0x15000, xz_size=8121652,
-               irf_off=0x1044B80, irf_max=4376803, size_off=0x1471468, load=0x01600000),
+               irf_off=0x1044B80, irf_max=4376803, size_off=0x1471468, load=0x01600000, stage_off=0x7D6000),
     "23": dict(gcc="gcc-12.3.0", kver="5.15.167", xz_off=0x14000, xz_size=6919172,
-               irf_off=8849408, irf_max=3785548, size_off=0xC0CB50, load=0x01500000),
+               irf_off=8849408, irf_max=3785548, size_off=0xC0CB50, load=0x01500000, stage_off=0x6B0000),
 }
 
 # Per-model differences. "overlay": a JFFS2 rootfs_data partition exists in the device tree.
@@ -171,6 +171,25 @@ done
     return text + "\nexit 0\n"
 
 
+def build_smp_stage(sdk: str, gcc: str, work: str, stage_addr: int, wrapper_entry: int) -> bytes:
+    """Assemble boot/smp: the pre-kernel stage (L2 cache on, core 1 released into a spin table)."""
+    cross = os.path.join(sdk, f"staging_dir/toolchain-powerpc_8548_{gcc}_musl/bin/powerpc-openwrt-linux-musl-")
+    src = os.path.join(REPO, "boot/smp")
+    out = os.path.join(work, "smp")
+    os.makedirs(out, exist_ok=True)
+    run(cross + "gcc", "-c", "-mcpu=8548", "-o", os.path.join(out, "bootpg.o"), os.path.join(src, "bootpg.S"))
+    run(cross + "ld", "-Ttext=0xfffff000", "-o", os.path.join(out, "bootpg.elf"), os.path.join(out, "bootpg.o"))
+    run(cross + "objcopy", "-O", "binary", os.path.join(out, "bootpg.elf"), os.path.join(out, "bootpg.bin"))
+    if os.path.getsize(os.path.join(out, "bootpg.bin")) != 4096:
+        sys.exit("[!] secondary boot page is not exactly 4096 bytes")
+    run(cross + "gcc", "-c", "-mcpu=8548", f"-DWRAPPER_ENTRY={wrapper_entry:#x}", f"-Wa,-I{out}",
+        "-o", os.path.join(out, "shim.o"), os.path.join(src, "shim.S"))
+    run(cross + "ld", f"-Ttext={stage_addr:#x}", "-o", os.path.join(out, "shim.elf"), os.path.join(out, "shim.o"))
+    run(cross + "objcopy", "-O", "binary", os.path.join(out, "shim.elf"), os.path.join(out, "shim.bin"))
+    with open(os.path.join(out, "shim.bin"), "rb") as f:
+        return f.read()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("release", choices=sorted(RELEASES))
@@ -186,6 +205,8 @@ def main() -> int:
     ap.add_argument("--model", choices=sorted(MODELS), default="3702i")
     ap.add_argument("--wifi", action="store_true", help="include the model's Wi-Fi drivers and firmware")
     ap.add_argument("--no-overlay", action="store_true", help="plain initramfs, nothing saved to flash")
+    ap.add_argument("--no-smp", action="store_true",
+                    help="leave out the pre-kernel stage (boot/smp): one CPU core, L2 cache enabled later by l2cache.ko")
     ap.add_argument("--pubkey", help="install this SSH public key and disable password logins")
     ap.add_argument("--drivers", default=os.path.join(REPO, "driver"), help="directory with the built .ko files")
     ap.add_argument("--fw-8864", default="/tmp/mwl_fw/lib/firmware/mwlwifi/88W8864.bin")
@@ -312,8 +333,18 @@ def main() -> int:
     if dtb_off < 0 or dtb_off + len(dtb) > c["xz_off"]:
         sys.exit("[!] DTB does not fit in the wrapper's DTB slot")
     head[dtb_off:] = dtb.ljust(c["xz_off"] - dtb_off, b"\0")
+    image = bytearray(bytes(head) + payload.ljust(c["xz_size"], b"\0"))
+    if not args.no_smp:
+        # The wrapper starts with "b +0x340". Redirect that branch to a stage appended behind the
+        # wrapper's BSS (zero padding keeps the BSS zero); the stage ends by jumping to +0x340 itself.
+        if struct.unpack(">I", image[:4])[0] != 0x48000340 or len(image) > c["stage_off"] - 0x1400:
+            sys.exit("[!] unexpected wrapper layout, cannot attach the SMP stage (use --no-smp)")
+        stage = build_smp_stage(sdk, c["gcc"], work, c["load"] + c["stage_off"], c["load"] + 0x340)
+        image[:4] = struct.pack(">I", 0x48000000 | c["stage_off"])
+        image = image.ljust(c["stage_off"], b"\0") + stage
+        print(f"[+] SMP stage  {len(stage)} bytes at {c['load'] + c['stage_off']:#010x}")
     with open(os.path.join(work, "raw.bin"), "wb") as f:
-        f.write(bytes(head) + payload.ljust(c["xz_size"], b"\0"))
+        f.write(image)
     run(sys.executable, os.path.join(REPO, "tools/mkciscoimage.py"), "pack-raw",
         os.path.join(work, "raw.bin"), args.out, f"{c['load']:#010x}")
     print(f"[OK] {args.out}: {os.path.getsize(args.out)} bytes, load/entry {c['load']:#010x}")

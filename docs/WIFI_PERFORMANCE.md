@@ -113,7 +113,7 @@ pays the Ethernet receive cost on top, which lands in the 30–71 Mbit/s range o
 Idle latency to the phone was 118–488 ms (30 pings, none lost); with a phone in power-save this
 says little and was not investigated. 2.4 GHz was not tested with a client.
 
-## 6. Remaining limit — one CPU core (not fixed)
+## 6. One CPU core — fixed separately, see [SMP.md](SMP.md)
 
 ```text
 smp: Bringing up secondary CPUs ...
@@ -127,7 +127,9 @@ ROMMON keeps core 1 in boot hold-off and provides no spin table, and the OpenWrt
 hotplug (`/sys/devices/system/cpu/cpu1` does not exist), so the core cannot be added after boot.
 It has to be released before the kernel starts: a small pre-kernel stage that installs a boot page
 (BPTR), a spin table and the secondary start-up code, sets the core's bit in EEBPCR, and a
-`cpu-release-addr` / `enable-method = "spin-table"` pair in the device tree. Not attempted yet.
+`cpu-release-addr` / `enable-method = "spin-table"` pair in the device tree. That stage now exists
+(`boot/smp`, described in SMP.md): with both cores the same 5 GHz test delivers 80 Mbit/s from one
+sender and 118 Mbit/s (10 100 frames/s) from two, still with 0 retries.
 
 ## 7. Remaining limit — the Ethernet driver (not fixed)
 

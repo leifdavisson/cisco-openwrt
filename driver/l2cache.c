@@ -11,14 +11,29 @@
 #include <linux/module.h>
 #include <linux/io.h>
 #include <linux/irqflags.h>
+#include <linux/smp.h>
 #include <asm/reg.h>
 
 #define L2_BASE		0xe0020000UL	/* CCSR 0xe0000000 + 0x20000 */
 #define L2CTL_L2E	0x80000000
 #define L2CTL_L2I	0x40000000
+#ifndef HID1_MBDD
+#define HID1_MBDD	0x00008000	/* optimised sync, core rev >= 5.0 (as U-Boot sets it) */
+#endif
 
 static bool enable;
 module_param(enable, bool, 0444);
+
+/* HID1[ABE]: broadcast dcbf/dcbi/icbi to the L2 cache and the other core. U-Boot sets it; ROMMON does not. */
+static void set_hid1_abe(void *unused)
+{
+	u32 hid1 = mfspr(SPRN_HID1) | HID1_ASTME | HID1_ABE;
+
+	if ((mfspr(SPRN_PVR) & 0xff) >= 0x50)
+		hid1 |= HID1_MBDD;
+	mtspr(SPRN_HID1, hid1);
+	isync();
+}
 
 static int __init l2cache_init(void)
 {
@@ -28,9 +43,11 @@ static int __init l2cache_init(void)
 
 	if (!l2)
 		return -ENOMEM;
+	if (enable)
+		on_each_cpu(set_hid1_abe, NULL, 1);
 	before = in_be32(l2);
-	pr_info("l2cache: L2CTL=0x%08x (%s, size field %u)\n", before,
-		(before & L2CTL_L2E) ? "ENABLED" : "disabled", (before >> 28) & 3);
+	pr_info("l2cache: L2CTL=0x%08x (%s, size field %u), HID1=0x%08lx\n", before,
+		(before & L2CTL_L2E) ? "ENABLED" : "disabled", (before >> 28) & 3, mfspr(SPRN_HID1));
 	if (enable && !(before & L2CTL_L2E)) {
 		local_irq_save(flags);
 		mb();

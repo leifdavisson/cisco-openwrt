@@ -14,6 +14,9 @@
 
 /dts-v1/;
 
+/* Secondary-core boot page + ePAPR spin table, installed by boot/smp before the kernel starts. */
+/memreserve/ 0x0ff00000 0x00001000;
+
 / {
 	model = "Cisco Aironet 2602i (AIR-CAP2602I)";
 	compatible = "cisco,ap2602i", "enterasys,ws-ap3710i", "fsl,P1020RDB", "fsl,P1020";
@@ -52,6 +55,8 @@
 			bus-frequency = <320000000>;
 			clock-frequency = <800000000>;
 			timebase-frequency = <40000000>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0x0ff00800>;
 		};
 	};
 

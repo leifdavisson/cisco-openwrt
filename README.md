@@ -27,7 +27,7 @@ Console cable + PoE + one command: see [docs/QUICK_INSTALL.md](docs/QUICK_INSTAL
 > that file system and the bootloader area. To update, reinstall through the bootloader as in the quick-install guide.
 
 ## Performance
-Why throughput was low, the two fixes (L2 cache, 2.4 GHz interrupt routing) and what is still limiting (one CPU core): [docs/WIFI_PERFORMANCE.md](docs/WIFI_PERFORMANCE.md).
+Why throughput was low and what was done about it — L2 cache, 2.4 GHz interrupt routing ([docs/WIFI_PERFORMANCE.md](docs/WIFI_PERFORMANCE.md)) and the second CPU core ([docs/SMP.md](docs/SMP.md)).
 
 ## Other models
 - **Aironet 2602i** (`AIR-CAP2602I`): same SoC and bootloader family. OpenWrt 25.12.6 installs to `flash:` and cold-boots standalone with working Ethernet (`dts/cisco-2602i.dts`); both radios load under `mwl8k` and scan. Not usable as an AP yet: AP mode untested, no saved settings, fallback MAC. See [docs/AP2602_NOTES.md](docs/AP2602_NOTES.md).

@@ -366,6 +366,7 @@ to the AP, or use a single-port server (`dnsmasq --enable-tftp --tftp-single-por
 | `driver/l2cache.c` | new: enables the L2 cache that ROMMON leaves off (see WIFI_PERFORMANCE.md) |
 | `dts/*.dts` | `pcie@e000a000` INTx → MPIC 0–3 (was 5/6/11/7): gives `mwl8k` its interrupt |
 | `docs/WIFI_PERFORMANCE.md` | new: throughput measurements, the two fixes, remaining limits |
+| `boot/smp/`, `docs/SMP.md` | new: pre-kernel stage that enables the L2 cache and releases the second core (`build_image.py`, default on) |
 | `docs/QUICK_INSTALL.md` | new: short install guide |
 | `docs/OPENWRT_25_PORT.md` | this document |
 | `README.md` | status, quick-install pointer, sysupgrade warning |
