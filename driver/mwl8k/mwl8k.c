@@ -5413,6 +5413,8 @@ static int mwl8k_sta_add(struct ieee80211_hw *hw,
 
 	} else {
 		ret = mwl8k_cmd_set_new_stn_add(hw, vif, sta);
+		if (!ret && sta->deflink.ht_cap.ht_supported)
+			MWL8K_STA(sta)->is_ampdu_allowed = true;
 	}
 
 	for (i = 0; i < NUM_WEP_KEYS; i++) {
@@ -5577,7 +5579,7 @@ mwl8k_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			 * sufficient time
 			 */
 
-			msleep(1000);
+			msleep(50);
 		}
 		spin_lock(&priv->stream_lock);
 		if (rc) {

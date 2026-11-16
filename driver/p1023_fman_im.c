@@ -145,8 +145,8 @@ static const u32 p1023_fman_ucode[1] = { 0 };
 #define DTSEC_MACCFG1_SOFT_RST	0x80000000U
 
 /* Ring & buffer sizing */
-#define RX_RING_SIZE		128
-#define TX_RING_SIZE		128
+#define RX_RING_SIZE		512
+#define TX_RING_SIZE		256
 #define PKT_BUF_SHIFT		11
 #define PKT_BUF_SIZE		(1U << PKT_BUF_SHIFT)	/* 2048 bytes */
 
@@ -732,9 +732,14 @@ static int p1023_napi_poll(struct napi_struct *napi, int budget)
 
 		priv->rx_idx = (priv->rx_idx + 1) % RX_RING_SIZE;
 		work_done++;
+		if ((work_done & 7) == 0) {
+			wmb();
+			iowrite16be(priv->rx_idx * sizeof(struct fm_im_bd),
+				    priv->rx_pram + IM_PRAM_RXQD + QD_OFFSET_OUT);
+		}
 	}
 
-	if (work_done) {
+	if (work_done & 7) {
 		wmb();
 		iowrite16be(priv->rx_idx * sizeof(struct fm_im_bd),
 			    priv->rx_pram + IM_PRAM_RXQD + QD_OFFSET_OUT);
@@ -758,7 +763,7 @@ static enum hrtimer_restart p1023_poll_timer_fn(struct hrtimer *timer)
 		napi_schedule(&priv->napi);
 	}
 
-	hrtimer_forward_now(timer, ns_to_ktime(250000)); /* 250 us */
+	hrtimer_forward_now(timer, ns_to_ktime(100000)); /* 100 us */
 	return HRTIMER_RESTART;
 }
 
