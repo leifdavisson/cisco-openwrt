@@ -5156,7 +5156,15 @@ static void
 mwl8k_bss_info_changed_ap(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			  struct ieee80211_bss_conf *info, u32 changed)
 {
+	struct mwl8k_priv *priv = hw->priv;
+	struct mwl8k_vif *mwl8k_vif = MWL8K_VIF(vif);
 	int rc;
+
+	if ((priv->running_bsses & (1 << mwl8k_vif->macid)) &&
+	    !(changed & BSS_CHANGED_BEACON_ENABLED) &&
+	    (!(changed & BSS_CHANGED_ERP_PREAMBLE) ||
+	     priv->radio_short_preamble == vif->bss_conf.use_short_preamble))
+		return;
 
 	if (mwl8k_fw_lock(hw))
 		return;
@@ -5186,7 +5194,9 @@ mwl8k_bss_info_changed_ap(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		else
 			rate = mwl8k_rates_50[idx].hw_value;
 
-		mwl8k_cmd_use_fixed_rate_ap(hw, rate, rate);
+		if (!(changed & BSS_CHANGED_BEACON) ||
+		    (changed & BSS_CHANGED_BEACON_ENABLED))
+			mwl8k_cmd_use_fixed_rate_ap(hw, rate, rate);
 	}
 
 	if (changed & (BSS_CHANGED_BEACON_INT | BSS_CHANGED_BEACON)) {

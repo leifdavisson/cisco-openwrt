@@ -145,8 +145,8 @@ static const u32 p1023_fman_ucode[1] = { 0 };
 #define DTSEC_MACCFG1_SOFT_RST	0x80000000U
 
 /* Ring & buffer sizing */
-#define RX_RING_SIZE		64
-#define TX_RING_SIZE		64
+#define RX_RING_SIZE		128
+#define TX_RING_SIZE		128
 #define PKT_BUF_SHIFT		11
 #define PKT_BUF_SIZE		(1U << PKT_BUF_SHIFT)	/* 2048 bytes */
 
@@ -706,10 +706,6 @@ static int p1023_napi_poll(struct napi_struct *napi, int budget)
 		pkt_len = be16_to_cpu(READ_ONCE(bd->len));
 		buf = priv->rx_bufs + (priv->rx_idx * PKT_BUF_SIZE);
 
-		priv->last_rx_status = status;
-		priv->last_rx_len = pkt_len;
-		memcpy(priv->last_rx_hdr, buf, min_t(u16, pkt_len, 16));
-
 		if ((status & RXBD_ERR_MASK) || !(status & RXBD_LAST) ||
 		    pkt_len < 14 || pkt_len > PKT_BUF_SIZE) {
 			priv->rx_errors++;
@@ -730,19 +726,18 @@ static int p1023_napi_poll(struct napi_struct *napi, int budget)
 		}
 
 		/* Return BD to FMan */
-		bd->buf_hi = 0;
-		bd->buf_lo = cpu_to_be32((u32)(priv->rx_bufs_dma +
-					       (priv->rx_idx * PKT_BUF_SIZE)));
 		bd->len = 0;
-		wmb();
+		dma_wmb();
 		WRITE_ONCE(bd->status, cpu_to_be16(RXBD_EMPTY));
-		wmb();
 
 		priv->rx_idx = (priv->rx_idx + 1) % RX_RING_SIZE;
+		work_done++;
+	}
+
+	if (work_done) {
+		wmb();
 		iowrite16be(priv->rx_idx * sizeof(struct fm_im_bd),
 			    priv->rx_pram + IM_PRAM_RXQD + QD_OFFSET_OUT);
-
-		work_done++;
 	}
 
 	if (work_done < budget)
@@ -903,9 +898,10 @@ static netdev_tx_t p1023_start_xmit(struct sk_buff *skb, struct net_device *ndev
 
 	tbuf = priv->tx_bufs + (idx * PKT_BUF_SIZE);
 	pkt_len = skb->len;
-	skb_copy_from_linear_data(skb, tbuf, skb_headlen(skb));
 	if (skb_is_nonlinear(skb))
 		skb_copy_bits(skb, 0, tbuf, pkt_len);
+	else
+		skb_copy_from_linear_data(skb, tbuf, pkt_len);
 
 	if (pkt_len < ETH_ZLEN) {
 		memset(tbuf + pkt_len, 0, ETH_ZLEN - pkt_len);

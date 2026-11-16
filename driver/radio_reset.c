@@ -15,12 +15,46 @@
 #define PWR_GPIO9	0x00400000	/* GPIO 9 */
 #define PWR_GPIO10	0x00200000	/* GPIO 10 */
 
+#define L2CTL_BASE	0xe0020000UL
+#define L2CTL_L2E	0x80000000U
+#define L2CTL_L2I	0x40000000U
+
+static void __init enable_l2_cache(void)
+{
+	void __iomem *l2;
+	u32 val;
+	int i;
+
+	l2 = ioremap(L2CTL_BASE, 0x100);
+	if (!l2)
+		return;
+
+	val = in_be32(l2);
+	pr_info("radio_reset: initial L2CTL=0x%08x\n", val);
+	if (!(val & L2CTL_L2E)) {
+		mb();
+		out_be32(l2, val | L2CTL_L2I);
+		for (i = 0; i < 10000; i++) {
+			if (!(in_be32(l2) & L2CTL_L2I))
+				break;
+			udelay(1);
+		}
+		val = in_be32(l2) & ~L2CTL_L2I;
+		out_be32(l2, val | L2CTL_L2E);
+		mb();
+		pr_info("radio_reset: enabled L2 cache, L2CTL=0x%08x\n", in_be32(l2));
+	}
+	iounmap(l2);
+}
+
 static int __init radio_reset_init(void)
 {
 	void __iomem *gpio;
 	struct pci_dev *pdev = NULL;
 	struct pci_bus *bus = NULL;
 	u32 v;
+
+	enable_l2_cache();
 
 	/* 1. Remove existing endpoints so pci_rescan_bus reallocates BAR0/BAR2 cleanly */
 	pdev = pci_get_device(0x11ab, 0xb024, NULL);
