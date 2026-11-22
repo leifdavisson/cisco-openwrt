@@ -25,6 +25,23 @@ OP_DATA = 3
 OP_ACK = 4
 OP_ERROR = 5
 
+def resolve_safe_path(serve_dir: str, requested_name: str) -> str | None:
+    """Resolve requested_name inside serve_dir, returning None on path traversal."""
+    real_serve = os.path.realpath(serve_dir)
+    clean_name = requested_name.lstrip("/")
+    actual_file = clean_name
+    if clean_name == "ap3g2-k9w7-tar.default" or not os.path.exists(os.path.join(real_serve, clean_name)):
+        for candidate in os.listdir(real_serve):
+            if candidate.startswith("ap3g2-k9w7-tar") and candidate.endswith(".tar"):
+                actual_file = candidate
+                break
+
+    candidate_path = os.path.realpath(os.path.join(real_serve, actual_file))
+    if os.path.commonpath([real_serve, candidate_path]) != real_serve:
+        return None
+    return candidate_path
+
+
 def start_tftp_server(serve_dir=DEFAULT_DIR, bind_ip="0.0.0.0"):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -50,16 +67,14 @@ def start_tftp_server(serve_dir=DEFAULT_DIR, bind_ip="0.0.0.0"):
                 continue
 
             parts = data[2:].split(b"\x00")
-            filename = parts[0].decode("latin1", errors="replace").lstrip("/")
-            # Support requesting 'ap3g2-k9w7-tar.default' as an alias
-            actual_file = filename
-            if filename == "ap3g2-k9w7-tar.default" or not os.path.exists(os.path.join(serve_dir, filename)):
-                for candidate in os.listdir(serve_dir):
-                    if candidate.startswith("ap3g2-k9w7-tar") and candidate.endswith(".tar"):
-                        actual_file = candidate
-                        break
+            filename = parts[0].decode("latin1", errors="replace")
+            filepath = resolve_safe_path(serve_dir, filename)
+            if filepath is None:
+                print(f"[!] Blocked path traversal attempt from {client_addr}: {filename!r}")
+                err = struct.pack(">HH", OP_ERROR, 2) + b"Access violation\x00"
+                sock.sendto(err, client_addr)
+                continue
 
-            filepath = os.path.join(serve_dir, actual_file)
             print(f"[+] Client {client_addr} requested: {filename} -> Serving: {filepath}")
 
             if not os.path.exists(filepath):

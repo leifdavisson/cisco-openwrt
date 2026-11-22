@@ -93,7 +93,11 @@ def main():
         digest = hashlib.sha512(blob).hexdigest()
         if digest in want_hashes:
             name = want_hashes[digest].lstrip("/")
-            out_path = os.path.join(args.outdir, name)
+            real_outdir = os.path.realpath(args.outdir)
+            out_path = os.path.realpath(os.path.join(real_outdir, name))
+            if os.path.commonpath([real_outdir, out_path]) != real_outdir:
+                print(f"[-] Skipping unsafe manifest path: {name!r}", file=sys.stderr)
+                continue
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
             with open(out_path, "wb") as out_f:
                 out_f.write(blob)

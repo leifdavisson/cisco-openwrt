@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, ld-branch]
   pull_request:
     branches: [master, main]
 
@@ -22,8 +22,8 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
 
-      - name: Type-check tests and core tools with mypy
-        run: mypy tests/ tftp_server.py tools/mkciscoimage.py
+      - name: Type-check Python sources with mypy
+        run: mypy .
 
       - name: Run unit tests
         run: pytest

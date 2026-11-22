@@ -39,15 +39,18 @@ MARVELL_KO = os.path.join(REPO_DIR, "imagebuilder/build_dir/target-powerpc_8548_
 FMAN_KO = os.path.join(REPO_DIR, "driver/p1023_fman_im.ko")
 
 def run_switch_cmd(cmd):
-    if not SWITCH_PASS:
-        raise RuntimeError("POE_SWITCH_PASS environment variable is not set.")
-    full_cmd = [
-        "sshpass", "-p", SWITCH_PASS,
-        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+    ssh_base = [
+        "ssh", "-o", "StrictHostKeyChecking=accept-new",
         f"{SWITCH_USER}@{SWITCH_IP}",
-        f"cli -c '{cmd}'"
+        f"cli -c '{cmd}'",
     ]
-    res = subprocess.run(full_cmd, capture_output=True, text=True, timeout=60)
+    env = os.environ.copy()
+    if SWITCH_PASS:
+        env["SSHPASS"] = SWITCH_PASS
+        full_cmd = ["sshpass", "-e", *ssh_base]
+    else:
+        full_cmd = ssh_base
+    res = subprocess.run(full_cmd, capture_output=True, text=True, timeout=60, env=env)
     return res.stdout.strip()
 
 def send_paced(ser, text, delay=0.015):

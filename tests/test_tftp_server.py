@@ -48,3 +48,18 @@ def test_serve_file_transfers_exact_bytes(tmp_path: Path) -> None:
     client_sock.close()
     time.sleep(0.05)
     assert bytes(received) == payload
+
+
+def test_resolve_safe_path_blocks_traversal(tmp_path: Path) -> None:
+    """Verify resolve_safe_path allows valid files and rejects path traversal."""
+    valid = tmp_path / "openwrt-3702i.bin"
+    valid.write_bytes(b"ok")
+    outside = tmp_path.parent / "secret.txt"
+    outside.write_bytes(b"nope")
+    try:
+        assert tftp_server.resolve_safe_path(str(tmp_path), "openwrt-3702i.bin") == str(valid.resolve())
+        assert tftp_server.resolve_safe_path(str(tmp_path), "/openwrt-3702i.bin") == str(valid.resolve())
+        assert tftp_server.resolve_safe_path(str(tmp_path), "../secret.txt") is None
+        assert tftp_server.resolve_safe_path(str(tmp_path), "../../etc/passwd") is None
+    finally:
+        outside.unlink(missing_ok=True)

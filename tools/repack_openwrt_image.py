@@ -17,6 +17,7 @@ This tool:
 8. Packages the final bootable MZIP Segment Type 0 binary for Cisco ROMMON
 """
 
+import argparse
 import os
 import sys
 import struct
@@ -62,7 +63,29 @@ def run(cmd, cwd=None):
         sys.exit(1)
     return res.stdout
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Repack OpenWrt 23.05 image for Cisco Aironet 3702i.")
+    parser.add_argument(
+        "--dev-unsafe",
+        action="store_true",
+        default=os.environ.get("OPENWRT_DEV_UNSAFE") == "1",
+        help="Enable passwordless root SSH and open (unencrypted) Wi-Fi for isolated bench testing.",
+    )
+    parser.add_argument(
+        "--wifi-psk",
+        default=os.environ.get("OPENWRT_WIFI_PSK", ""),
+        help="WPA2-PSK passphrase for the OpenWRT SSID (enables radios with psk2).",
+    )
+    parser.add_argument(
+        "--ssh-pubkey",
+        default=os.environ.get("OPENWRT_SSH_PUBKEY", ""),
+        help="Path to an SSH public key to install into /etc/dropbear/authorized_keys.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     print("=" * 70)
     print("OPENWRT IMAGE REPACKER FOR CISCO AIRONET 3702i")
     print("=" * 70)
@@ -167,14 +190,24 @@ config interface 'lan'
     with open(os.path.join(ROOTFS_DIR, "etc/config/network"), "w") as f:
         f.write(net_cfg)
 
-    # Wireless config (dual-band AP broadcasting 'OpenWRT')
-    wireless_cfg = """config wifi-device 'radio0'
+    # Wireless config (disabled by default unless --wifi-psk or --dev-unsafe is set)
+    if args.wifi_psk:
+        wifi_disabled = "0"
+        wifi_enc = f"psk2\n\toption key '{args.wifi_psk}'"
+    elif args.dev_unsafe:
+        wifi_disabled = "0"
+        wifi_enc = "none"
+    else:
+        wifi_disabled = "1"
+        wifi_enc = "none"
+
+    wireless_cfg = f"""config wifi-device 'radio0'
 	option type 'mac80211'
 	option path 'e0009000.pcie/pci9000:00/9000:00:00.0/9000:01:00.0'
 	option channel '36'
 	option band '5g'
 	option htmode 'VHT80'
-	option disabled '0'
+	option disabled '{wifi_disabled}'
 	option country 'US'
 
 config wifi-iface 'default_radio0'
@@ -182,7 +215,7 @@ config wifi-iface 'default_radio0'
 	option network 'lan'
 	option mode 'ap'
 	option ssid 'OpenWRT'
-	option encryption 'none'
+	option encryption '{wifi_enc}'
 
 config wifi-device 'radio1'
 	option type 'mac80211'
@@ -190,7 +223,7 @@ config wifi-device 'radio1'
 	option channel '6'
 	option band '2g'
 	option htmode 'HT20'
-	option disabled '0'
+	option disabled '{wifi_disabled}'
 	option country 'US'
 
 config wifi-iface 'default_radio1'
@@ -198,7 +231,7 @@ config wifi-iface 'default_radio1'
 	option network 'lan'
 	option mode 'ap'
 	option ssid 'OpenWRT'
-	option encryption 'none'
+	option encryption '{wifi_enc}'
 """
     with open(os.path.join(ROOTFS_DIR, "etc/config/wireless"), "w") as f:
         f.write(wireless_cfg)
@@ -237,9 +270,17 @@ config odhcpd 'odhcpd'
     with open(os.path.join(ROOTFS_DIR, "etc/config/dhcp"), "w") as f:
         f.write(dhcp_cfg)
 
-    # Passwordless root for SSH
-    with open(os.path.join(ROOTFS_DIR, "etc/shadow"), "w") as f:
-        f.write("root:::0:99999:7:::\ndaemon:*:0:0:99999:7:::\nftp:*:0:0:99999:7:::\nnetwork:*:0:0:99999:7:::\nnobody:*:0:0:99999:7:::\n")
+    # Root access: only allow passwordless root when --dev-unsafe is explicitly passed
+    if args.dev_unsafe:
+        print("[!] WARNING: --dev-unsafe enabled: passwordless root SSH and/or open Wi-Fi configured.")
+        with open(os.path.join(ROOTFS_DIR, "etc/shadow"), "w") as f:
+            f.write("root:::0:99999:7:::\ndaemon:*:0:0:99999:7:::\nftp:*:0:0:99999:7:::\nnetwork:*:0:0:99999:7:::\nnobody:*:0:0:99999:7:::\n")
+    if args.ssh_pubkey and os.path.isfile(args.ssh_pubkey):
+        dropbear_dir = os.path.join(ROOTFS_DIR, "etc/dropbear")
+        os.makedirs(dropbear_dir, exist_ok=True)
+        auth_keys = os.path.join(dropbear_dir, "authorized_keys")
+        shutil.copy2(args.ssh_pubkey, auth_keys)
+        os.chmod(auth_keys, 0o600)
 
     # rc.local fallback startup
     rc_local = """# Put your custom commands here that should be executed once

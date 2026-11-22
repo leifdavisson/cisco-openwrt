@@ -4,6 +4,7 @@ repack_openwrt25_image.py - OpenWrt 25.12.6 (Linux 6.12.112) initramfs & kernel 
 License: GNU AGPLv3.
 """
 
+import argparse
 import os
 import sys
 import struct
@@ -54,7 +55,24 @@ def run(cmd, cwd=None):
     return res.stdout
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Repack OpenWrt 25.12.6 image for Cisco Aironet 3702i.")
+    parser.add_argument(
+        "--dev-unsafe",
+        action="store_true",
+        default=os.environ.get("OPENWRT_DEV_UNSAFE") == "1",
+        help="Enable passwordless root SSH for isolated bench testing.",
+    )
+    parser.add_argument(
+        "--ssh-pubkey",
+        default=os.environ.get("OPENWRT_SSH_PUBKEY", ""),
+        help="Path to an SSH public key to install into /etc/dropbear/authorized_keys.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     print("=" * 70)
     print("OPENWRT 25.12.6 IMAGE REPACKER FOR CISCO AIRONET 3702i")
     print("=" * 70)
@@ -185,8 +203,16 @@ config odhcpd 'odhcpd'
     with open(os.path.join(ROOTFS_DIR, "etc/config/dhcp"), "w") as f:
         f.write(dhcp_cfg)
 
-    with open(os.path.join(ROOTFS_DIR, "etc/shadow"), "w") as f:
-        f.write("root:::0:99999:7:::\ndaemon:*:0:0:99999:7:::\nftp:*:0:0:99999:7:::\nnetwork:*:0:0:99999:7:::\nnobody:*:0:0:99999:7:::\n")
+    if args.dev_unsafe:
+        print("[!] WARNING: --dev-unsafe enabled: passwordless root SSH configured.")
+        with open(os.path.join(ROOTFS_DIR, "etc/shadow"), "w") as f:
+            f.write("root:::0:99999:7:::\ndaemon:*:0:0:99999:7:::\nftp:*:0:0:99999:7:::\nnetwork:*:0:0:99999:7:::\nnobody:*:0:0:99999:7:::\n")
+    if args.ssh_pubkey and os.path.isfile(args.ssh_pubkey):
+        dropbear_dir = os.path.join(ROOTFS_DIR, "etc/dropbear")
+        os.makedirs(dropbear_dir, exist_ok=True)
+        auth_keys = os.path.join(dropbear_dir, "authorized_keys")
+        shutil.copy2(args.ssh_pubkey, auth_keys)
+        os.chmod(auth_keys, 0o600)
 
     rc_local = f"""# Put your custom commands here that should be executed once
 # the system init finished.

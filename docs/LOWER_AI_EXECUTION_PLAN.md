@@ -24,7 +24,7 @@ This document provides deterministic, copy-pasteable instructions for building, 
 
 ## Next Step: Boot Repacked `openwrt-3702i.bin` & Benchmark 2-Core SMP Pipeline
 
-### 1. Repack Image (Already Built at `/home/leifdavisson/Downloads/openwrt-3702i.bin`)
+### 1. Repack Image (Already Built at `~/Downloads/openwrt-3702i.bin`)
 If you modify `driver/`, `driver/mwlwifi/`, `driver/mwl8k/`, or `dts/cisco-3702i.dts`:
 ```bash
 git -C driver/mwlwifi diff > patches/mwlwifi-powerpc-fixes.patch
@@ -69,7 +69,7 @@ python3 tools/serial_cmd.py "dmesg -n 1; dmesg | grep -E 'smp:|p1023'; iwinfo"
 ```bash
 # 5 GHz VHT80 Benchmark:
 nmcli dev wifi rescan ifname wlp9s0 && sleep 3
-nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid 64:DC:72:D0:FF:FF
+nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid <AP_5GHZ_BSSID>
 iw dev wlp9s0 set power_save off
 python3 tools/serial_cmd.py "grep '^cpu' /proc/stat"
 iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R

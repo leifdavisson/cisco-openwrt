@@ -59,13 +59,13 @@ static int __init radio_reset_init(void)
 	/* 1. Remove existing endpoints so pci_rescan_bus reallocates BAR0/BAR2 cleanly */
 	pdev = pci_get_device(0x11ab, 0xb024, NULL);
 	if (pdev) {
-		pci_dev_put(pdev);
 		pci_stop_and_remove_bus_device_locked(pdev);
+		pci_dev_put(pdev);
 	}
 	pdev = pci_get_device(0x11ab, 0xb050, NULL);
 	if (pdev) {
-		pci_dev_put(pdev);
 		pci_stop_and_remove_bus_device_locked(pdev);
+		pci_dev_put(pdev);
 	}
 
 	/* 2. Assert GPIO 9 & 10 high, then pulse GPIO 1 & GPIO 3 low for 50ms, then high for 256ms */

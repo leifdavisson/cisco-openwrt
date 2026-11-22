@@ -39,9 +39,9 @@
 
 ---
 
-## 3. Ready-to-Verify Optimizations Built Into `/home/leifdavisson/Downloads/openwrt-3702i.bin`
+## 3. Ready-to-Verify Optimizations Built Into `~/Downloads/openwrt-3702i.bin`
 
-The repacked image at `/home/leifdavisson/Downloads/openwrt-3702i.bin` now contains three new optimizations ready for clean cold-boot benchmarking:
+The repacked image at `~/Downloads/openwrt-3702i.bin` now contains three new optimizations ready for clean cold-boot benchmarking:
 
 1. **2-Core SMP TX Pipeline in `mwlwifi` (`patches/mwlwifi-powerpc-fixes.patch`):**
    - `eth0` `rps_cpus=2` runs `br-lan` + `mac80211` (`pcie_8864_tx_xmit`) on **`CPU1`**.
@@ -57,7 +57,7 @@ The repacked image at `/home/leifdavisson/Downloads/openwrt-3702i.bin` now conta
 
 ## 4. Next Troubleshooting & Verification Steps
 
-1. **PoE Power-Cycle & Boot the Repacked SMP-Pipelined Image (`/home/leifdavisson/Downloads/openwrt-3702i.bin`):**
+1. **PoE Power-Cycle & Boot the Repacked SMP-Pipelined Image (`~/Downloads/openwrt-3702i.bin`):**
    ```bash
    POE_SWITCH_PASS='<switch_password>' python3 tools/poe_bounce_to_rommon.py
    # Then boot tftp://192.168.1.153/openwrt-3702i.bin from ap: (or run powercycle_and_boot.py)
@@ -65,7 +65,7 @@ The repacked image at `/home/leifdavisson/Downloads/openwrt-3702i.bin` now conta
 2. **Benchmark the 2-Core SMP `tx_csd` Pipeline on 5 GHz & Verify `/proc/stat` Balance:**
    ```bash
    nmcli dev wifi rescan ifname wlp9s0 && sleep 3
-   nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid 64:DC:72:D0:FF:FF
+   nmcli dev wifi connect OpenWRT ifname wlp9s0 bssid <AP_5GHZ_BSSID>
    python3 tools/serial_cmd.py "grep '^cpu' /proc/stat"
    iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -R
    iperf3 -c 192.168.1.245 -B 192.168.1.244 -t 10 -P 4 -R
