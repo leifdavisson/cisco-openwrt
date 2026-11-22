@@ -70,22 +70,23 @@ def crc16_ccitt(data, remainder=0x0):
         crc = ((crc << 8) & 0xFFFF) ^ CRC16_CCITT_TABLE[((crc >> 8) ^ b) & 0xFF]
     return (~crc) & 0xFFFF
 
+CW_TRAILER = (
+    b"CW_BEGIN$-gs-openwrt-m$\n"
+    b"CW_IMAGE$AP3G2-OPENWRT-M$\n"
+    b"CW_FAMILY$AP3G2$\n"
+    b"CW_FEATURE$WIRELESS LAN$\n"
+    b"CW_MAGIC$$\n"
+    b"CW_END$-gs-openwrt-m$\n"
+)
+
+
 def pack_image(input_bin_path, output_path, format_type="mzip", entry_addr=None):
     with open(input_bin_path, "rb") as f:
         raw_code = f.read()
 
-    trailer = (
-        b"\nCW_BEGIN$-gs-openwrt-m$\n"
-        b"CW_IMAGE$AP3G2-OPENWRT-M$\n"
-        b"CW_FAMILY$AP3G2$\n"
-        b"CW_FEATURE$WIRELESS LAN$\n"
-        b"CW_MAGIC$$\n"
-        b"CW_END$-gs-openwrt-m$\n"
-    )
-
     if b"CW_FAMILY$" not in raw_code:
         print("[*] Appending mandatory Cisco CW_ metadata tags to payload for ROMMON verification...")
-        raw_code = raw_code + trailer
+        raw_code = raw_code + b"\n" + CW_TRAILER
 
     uncompressed_len = len(raw_code)
     print(f"[*] Input binary with metadata: {input_bin_path} ({uncompressed_len} bytes)")
@@ -146,21 +147,12 @@ def pack_image(input_bin_path, output_path, format_type="mzip", entry_addr=None)
     print(f"[*] Header CRC16:  0x{hdr_crc:04x}")
     print(f"[*] Segment CRC16: 0x{seg_crc:04x}")
 
-    trailer = (
-        b"CW_BEGIN$-gs-openwrt-m$\n"
-        b"CW_IMAGE$AP3G2-OPENWRT-M$\n"
-        b"CW_FAMILY$AP3G2$\n"
-        b"CW_FEATURE$WIRELESS LAN$\n"
-        b"CW_MAGIC$$\n"
-        b"CW_END$-gs-openwrt-m$\n"
-    )
-
     with open(output_path, "wb") as f:
         f.write(hdr)
         f.write(payload)
-        f.write(trailer)
+        f.write(CW_TRAILER)
 
-    print(f"[+] Output image created: {output_path} ({len(hdr) + len(payload) + len(trailer)} bytes)")
+    print(f"[+] Output image created: {output_path} ({len(hdr) + len(payload) + len(CW_TRAILER)} bytes)")
 
 def unpack_image(input_path, output_bin_path):
     with open(input_path, "rb") as f:

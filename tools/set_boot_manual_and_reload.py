@@ -3,12 +3,14 @@
 Set boot manual and reload to ROMMON prompt on Cisco AP3702.
 License: GNU AGPLv3
 """
+import os
 import sys
 import time
 import serial
 
-PORT = "/dev/ttyUSB0"
+PORT = os.environ.get("SERIAL_PORT", "/dev/ttyUSB0")
 BAUD = 9600
+ENABLE_PASS = os.environ.get("CISCO_ENABLE_PASS", "Cisco")
 
 def set_manual_and_reload():
     print(f"[*] Connecting to {PORT} at {BAUD} baud...")
@@ -30,7 +32,7 @@ def set_manual_and_reload():
     # Enable mode
     out = send_cmd("enable")
     if "Password:" in out:
-        send_cmd("Cisco1234!")
+        send_cmd(ENABLE_PASS)
 
     # Configure boot manual
     print("[*] Configuring 'boot manual'...")

@@ -206,8 +206,6 @@ struct p1023_priv {
 	struct sk_buff *tx_skbs[TX_RING_SIZE];
 	dma_addr_t tx_dma[TX_RING_SIZE];
 	u16 tx_dma_len[TX_RING_SIZE];
-	u8 *tx_bufs;
-	dma_addr_t tx_bufs_dma;
 
 	u16 rx_idx;
 	u16 tx_idx;
@@ -1168,9 +1166,13 @@ static ssize_t p1023_proc_write(struct file *file, const char __user *buf,
 			iowrite32be(val1, priv->dtsec0 + DTSEC_TCTRL);
 			pr_info(DRV_NAME ": DTSEC_TCTRL set to 0x%08x\n", val1);
 		} else if (!strcmp(cmd, "dtsec")) {
+			if ((val1 & 3) || val1 >= 0x1000)
+				return -EINVAL;
 			iowrite32be(val2, priv->dtsec0 + val1);
 			pr_info(DRV_NAME ": DTSEC[0x%x] set to 0x%08x\n", val1, val2);
 		} else if (!strcmp(cmd, "fman")) {
+			if ((val1 & 3) || val1 >= P1023_FMAN_SIZE)
+				return -EINVAL;
 			iowrite32be(val2, priv->fman + val1);
 			pr_info(DRV_NAME ": FMAN[0x%x] set to 0x%08x\n", val1, val2);
 		}
@@ -1208,9 +1210,8 @@ static void p1023_extract_initial_mac(struct p1023_priv *priv, u8 *mac)
 	mac[5] = (a1 >> 24) & 0xff;
 
 	if (!is_valid_ether_addr(mac)) {
-		/* Fallback locally-administered MAC if hardware registers are uninitialized */
-		mac[0] = 0x02; mac[1] = 0x00; mac[2] = 0x00;
-		mac[3] = 0x37; mac[4] = 0x02; mac[5] = 0x01;
+		/* Generate locally-administered random MAC if hardware registers are uninitialized */
+		eth_random_addr(mac);
 	}
 }
 
@@ -1296,7 +1297,7 @@ static int __init p1023_fman_im_init(void)
 	priv->poll_timer.function = p1023_poll_timer_fn;
 
 	g_priv = priv;
-	g_proc = proc_create("p1023_fman_regs", 0644, NULL, &p1023_proc_ops);
+	g_proc = proc_create("p1023_fman_regs", 0600, NULL, &p1023_proc_ops);
 
 	ret = register_netdev(ndev);
 	if (ret)

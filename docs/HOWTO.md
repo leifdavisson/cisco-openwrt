@@ -1,6 +1,6 @@
 # How-To Guide: Loading & Building OpenWrt for the Cisco Aironet 3702i
 
-This guide explains both **how to load a pre-built `openwrt-3702i.bin` image** onto a Cisco Aironet AIR-CAP3702I (via safe TFTP RAM-boot or persistent NOR flash) and **how to compile `openwrt-3702i.bin` from source** on `ld-branch`.
+This guide explains both **how to load a pre-built `openwrt-3702i.bin` image** onto a Cisco Aironet AIR-CAP3702I (via safe TFTP RAM-boot or persistent NOR flash) and **how to compile `openwrt-3702i.bin` from source**.
 
 ---
 
@@ -63,9 +63,9 @@ RAM-booting loads OpenWrt directly into DDR3 without touching your existing Cisc
 
 ## Part 2: Compiling `openwrt-3702i.bin` from Source
 
-### 1. Clone the Repository (`ld-branch`)
+### 1. Clone the Repository
 ```bash
-git clone -b ld-branch https://github.com/leifdavisson/cisco-openwrt.git
+git clone https://github.com/leifdavisson/cisco-openwrt.git
 cd cisco-openwrt
 ```
 
@@ -89,9 +89,9 @@ If `sdk/` is not yet populated in your checkout, download/extract the OpenWrt 23
 - Compiles the `dts/cisco-3702i.dts` Device Tree and `boot/smp` pre-kernel CPU1 spin-table stage (`boot/smp/bootpg.S`, `boot/smp/shim.S`)
 - Packs everything into a Cisco ROMMON MZIP image at `/home/$USER/Downloads/openwrt-3702i.bin`
 
-Run:
+Run (passing `--wifi-psk` and `--ssh-pubkey` for secure access, or `--dev-unsafe` only for isolated bench testing):
 ```bash
-python3 tools/repack_openwrt_image.py
+python3 tools/repack_openwrt_image.py --wifi-psk "YourStrongPassphrase" --ssh-pubkey ~/.ssh/id_ed25519.pub
 ```
 When complete, `/home/$USER/Downloads/openwrt-3702i.bin` (~7.0 MB) is ready to serve via TFTP.
 

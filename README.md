@@ -2,7 +2,7 @@
 
 Bootable OpenWrt port for the **Cisco Aironet AIR-CAP3702I** (and AIR-CAP3602I) enterprise wireless access points based on the **Freescale/NXP QorIQ P1020 / P1023** (`mpc85xx/p1020`, Dual-Core PowerPC `e500v2` @ 800 MHz).
 
-## Current Status (`ld-branch` — Verified on Hardware)
+## Current Status (Verified on Hardware)
 
 | Subsystem | Hardware | Driver / Module | Status | Verified Performance / Notes |
 | :--- | :--- | :--- | :--- | :--- |
@@ -28,6 +28,7 @@ Bootable OpenWrt port for the **Cisco Aironet AIR-CAP3702I** (and AIR-CAP3602I) 
 
 ## Documentation Index
 
+- **[docs/HOWTO.md](docs/HOWTO.md)**: Step-by-step guide for loading `openwrt-3702i.bin` via TFTP/NOR flash and building from source.
 - **[docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md](docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md)**: Verified benchmark progression, `/proc/stat` CPU saturation proof, `flashfs` calibration findings, and next-step verification commands.
 - **[docs/WIFI_PERFORMANCE.md](docs/WIFI_PERFORMANCE.md)**: Hardware/firmware investigation of the 3702i radio and Ethernet data path (Marco Mata + `ld-branch` follow-up).
 - **[docs/SMP.md](docs/SMP.md)**: Pre-kernel `boot/smp` stage (`boot/smp/shim.S` and `boot/smp/bootpg.S`) for bringing up `CPU1` and enabling the 256 KB L2 cache.

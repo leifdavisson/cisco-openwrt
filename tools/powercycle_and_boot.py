@@ -301,7 +301,7 @@ def main():
                     send_shell_cmd(ser, "/etc/init.d/uhttpd restart", wait_time=1.0)
 
                     print("\n[*] Checking interfaces & PHY status...")
-                    send_shell_cmd(ser, "cat /proc/p1023_fman_im", wait_time=0.8)
+                    send_shell_cmd(ser, "cat /proc/p1023_fman_regs", wait_time=0.8)
                     send_shell_cmd(ser, "cat /sys/class/net/eth0/carrier", wait_time=0.5)
                     send_shell_cmd(ser, "ip a show dev br-lan", wait_time=0.5)
                     send_shell_cmd(ser, "ip a show dev eth0", wait_time=0.5)
@@ -350,7 +350,7 @@ def main():
 
     print(f"\n[*] Host Verification: Checking SSH on {TARGET_IP}...")
     ssh_res = subprocess.run([
-        "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+        "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=5",
         f"root@{TARGET_IP}", "uname -a"
     ], capture_output=True, text=True)
     print(f"[Host SSH]\n{ssh_res.stdout.strip()}")

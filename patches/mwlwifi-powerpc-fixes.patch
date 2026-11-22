@@ -40,7 +40,7 @@ index 6c5b496..3e3d1da 100644
  clean:
  	rm -f *.a *.s *.ko *.ko.cmd *.mod.* .mwlwifi.* modules.order Module.symvers
 diff --git a/core.c b/core.c
-index d8e334f..c45e045 100644
+index d8e334f..9c33f9d 100644
 --- a/core.c
 +++ b/core.c
 @@ -718,8 +718,12 @@ static void mwl_chnl_switch_event(struct work_struct *work)
@@ -56,17 +56,6 @@ index d8e334f..c45e045 100644
 +#endif
  	}
  	spin_unlock_bh(&priv->vif_lock);
- 
-@@ -1003,6 +1007,10 @@ struct ieee80211_hw *mwl_alloc_hw(int bus_type,
- 	struct ieee80211_hw *hw;
- 	struct mwl_priv *priv;
- 	int priv_size;
-+	const void *const *p = (const void *const *)&mwl_mac80211_ops;
-+
-+	pr_info("MWL OPS DUMP: [0]=%px [4]=%px [8]=%px [12]=%px [20]=%px [24]=%px [52]=%px [360]=%px\n",
-+		p[0], p[1], p[2], p[3], p[5], p[6], p[13], p[90]);
- 
- 	priv_size = ALIGN(sizeof(*priv), NETDEV_ALIGN) + hif_data_len;
  
 diff --git a/core.h b/core.h
 index 9f1d61d..889fcb3 100644
@@ -388,7 +377,7 @@ index 8d54bc3..4f78231 100644
  struct channel_power_tbl_sc4 {
  	u8 channel;
 diff --git a/hif/pcie/8864/tx.c b/hif/pcie/8864/tx.c
-index 05b6021..93138fd 100644
+index 05b6021..ca22d52 100644
 --- a/hif/pcie/8864/tx.c
 +++ b/hif/pcie/8864/tx.c
 @@ -291,12 +291,8 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
@@ -413,8 +402,8 @@ index 05b6021..93138fd 100644
 +{
 +	struct pcie_priv *pcie_priv = info;
 +
-+	atomic_set(&pcie_priv->tx_csd_pending, 0);
 +	tasklet_schedule(&pcie_priv->tx_task);
++	atomic_set_release(&pcie_priv->tx_csd_pending, 0);
 +}
 +
 +static inline void pcie_8864_schedule_tx(struct pcie_priv *pcie_priv)
@@ -775,7 +764,7 @@ index 939ed54..2133b4e 100644
  		curr_iteration--;
  		writel(HOSTCMD_SOFTAP_MODE,
 diff --git a/hif/pcie/pcie.c b/hif/pcie/pcie.c
-index 81dbfe5..e982b41 100644
+index 81dbfe5..e681e85 100644
 --- a/hif/pcie/pcie.c
 +++ b/hif/pcie/pcie.c
 @@ -49,6 +49,8 @@ static unsigned int feature = 0x0;
@@ -787,7 +776,16 @@ index 81dbfe5..e982b41 100644
  	{ PCI_VDEVICE(MARVELL, 0x2b38),     .driver_data = MWL8897, },
  	{ PCI_VDEVICE(MARVELL, 0x2b40),     .driver_data = MWL8964, },
  	{ PCI_VDEVICE(MARVELL_EXT, 0x2b42), .driver_data = MWL8997, },
-@@ -533,7 +535,11 @@ static irqreturn_t pcie_isr_8864(struct ieee80211_hw *hw)
+@@ -448,6 +450,8 @@ static void pcie_disable_data_tasks(struct ieee80211_hw *hw)
+ 	struct mwl_priv *priv = hw->priv;
+ 	struct pcie_priv *pcie_priv = priv->hif.priv;
+ 
++	while (atomic_read(&pcie_priv->tx_csd_pending))
++		cpu_relax();
+ 	tasklet_disable(&pcie_priv->tx_task);
+ 	tasklet_disable(&pcie_priv->tx_done_task);
+ 	napi_synchronize(&pcie_priv->napi);
+@@ -533,7 +537,11 @@ static irqreturn_t pcie_isr_8864(struct ieee80211_hw *hw)
  
  		if (int_status & MACREG_A2HRIC_BIT_RADAR_DETECT) {
  			wiphy_info(hw->wiphy, "radar detected by firmware\n");
@@ -799,7 +797,7 @@ index 81dbfe5..e982b41 100644
  		}
  
  		if (int_status & MACREG_A2HRIC_BIT_CHAN_SWITCH)
-@@ -575,7 +581,11 @@ static irqreturn_t pcie_isr_8997(struct ieee80211_hw *hw)
+@@ -575,7 +583,11 @@ static irqreturn_t pcie_isr_8997(struct ieee80211_hw *hw)
  
  		if (int_status & MACREG_A2HRIC_BIT_RADAR_DETECT) {
  			wiphy_info(hw->wiphy, "radar detected by firmware\n");
@@ -811,7 +809,7 @@ index 81dbfe5..e982b41 100644
  		}
  
  		if (int_status & MACREG_A2HRIC_BIT_CHAN_SWITCH)
-@@ -593,12 +603,10 @@ static void pcie_irq_enable(struct ieee80211_hw *hw)
+@@ -593,12 +605,10 @@ static void pcie_irq_enable(struct ieee80211_hw *hw)
  	struct mwl_priv *priv = hw->priv;
  	struct pcie_priv *pcie_priv = priv->hif.priv;
  
@@ -828,7 +826,7 @@ index 81dbfe5..e982b41 100644
  }
  
  static void pcie_irq_disable(struct ieee80211_hw *hw)
-@@ -606,9 +614,8 @@ static void pcie_irq_disable(struct ieee80211_hw *hw)
+@@ -606,9 +616,8 @@ static void pcie_irq_disable(struct ieee80211_hw *hw)
  	struct mwl_priv *priv = hw->priv;
  	struct pcie_priv *pcie_priv = priv->hif.priv;
  
@@ -840,7 +838,16 @@ index 81dbfe5..e982b41 100644
  }
  
  static void pcie_timer_routine(struct ieee80211_hw *hw)
-@@ -1053,7 +1060,11 @@ static irqreturn_t pcie_isr_ndp(struct ieee80211_hw *hw)
+@@ -1017,6 +1026,8 @@ static void pcie_disable_data_tasks_ndp(struct ieee80211_hw *hw)
+ 	struct mwl_priv *priv = hw->priv;
+ 	struct pcie_priv *pcie_priv = priv->hif.priv;
+ 
++	while (atomic_read(&pcie_priv->tx_csd_pending))
++		cpu_relax();
+ 	tasklet_disable(&pcie_priv->tx_task);
+ 	tasklet_disable(&pcie_priv->rx_task);
+ }
+@@ -1053,7 +1064,11 @@ static irqreturn_t pcie_isr_ndp(struct ieee80211_hw *hw)
  
  		if (int_status & MACREG_A2HRIC_NEWDP_DFS) {
  			wiphy_info(hw->wiphy, "radar detected by firmware\n");
@@ -852,7 +859,7 @@ index 81dbfe5..e982b41 100644
  		}
  
  		if (int_status & MACREG_A2HRIC_NEWDP_CHANNEL_SWITCH)
-@@ -1449,8 +1460,8 @@ static void pcie_bf_mimo_ctrl_decode(struct mwl_priv *priv,
+@@ -1449,8 +1464,8 @@ static void pcie_bf_mimo_ctrl_decode(struct mwl_priv *priv,
  			       &fp_data->f_pos);
  		filp_close(fp_data, current->files);
  	} else {
@@ -863,7 +870,7 @@ index 81dbfe5..e982b41 100644
  	}
  
  #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
-@@ -1738,13 +1749,16 @@ static int pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+@@ -1738,13 +1753,16 @@ static int pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
  		}
  	}
  

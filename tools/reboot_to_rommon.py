@@ -6,12 +6,14 @@ Licensed under GNU AGPLv3.
 Author: Antigravity Pair Programmer
 """
 
+import os
 import sys
 import time
 import serial
 
-PORT = "/dev/ttyUSB0"
+PORT = os.environ.get("SERIAL_PORT", "/dev/ttyUSB0")
 BAUD = 9600
+ENABLE_PASS = os.environ.get("CISCO_ENABLE_PASS", "Cisco")
 
 def main():
     print(f"[*] Connecting to {PORT} at {BAUD} baud...")
@@ -26,7 +28,7 @@ def main():
     time.sleep(0.3)
     out = ser.read(ser.in_waiting or 1).decode("latin1", errors="replace")
     if "Password:" in out:
-        ser.write(b"Cisco1234!\r\n")
+        ser.write((ENABLE_PASS + "\r\n").encode("latin1"))
         time.sleep(0.3)
         ser.read(ser.in_waiting or 1)
 
