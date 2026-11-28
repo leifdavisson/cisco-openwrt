@@ -1,0 +1,51 @@
+From: Legodev <legodevgit@mailbox.org>
+Subject: [PATCH] soc: fsl: qbman: respect P1023 resource counts
+
+QMan revision 2.0 has 64 congestion groups and three pool channels;
+BMan revision 2.0 has eight buffer pools. Keep initialization and
+cleanup within these limits. Build the SDQCR pool mask from actual
+pool-channel indices instead of congestion-group indices.
+
+Only QMan/BMan hardware drivers are changed.
+
+Signed-off-by: Legodev <legodevgit@mailbox.org>
+
+diff --git a/drivers/soc/fsl/qbman/qman.c b/drivers/soc/fsl/qbman/qman.c
+--- a/drivers/soc/fsl/qbman/qman.c
++++ b/drivers/soc/fsl/qbman/qman.c
+@@ -2408,7 +2408,8 @@
+ 	struct qman_cgr cgr;
+ 	int err_cnt = 0;
+ 
+-	for (cgr.cgrid = 0; cgr.cgrid < CGR_NUM; cgr.cgrid++) {
++	for (cgr.cgrid = 0; cgr.cgrid <
++	     (qman_ip_rev == QMAN_REV20 ? 64 : CGR_NUM); cgr.cgrid++) {
+ 		if (qm_modify_cgr(&cgr, QMAN_CGR_FLAG_USE_INIT, NULL))
+ 			err_cnt++;
+ 	}
+diff --git a/drivers/soc/fsl/qbman/bman_portal.c b/drivers/soc/fsl/qbman/bman_portal.c
+--- a/drivers/soc/fsl/qbman/bman_portal.c
++++ b/drivers/soc/fsl/qbman/bman_portal.c
+@@ -182,7 +182,7 @@
+ 		 * BMan wasn't reset prior to boot (Kexec for example)
+ 		 * Empty all the buffer pools so they are in reset state
+ 		 */
+-		for (i = 0; i < BM_POOL_MAX; i++) {
++		for (i = 0; i < (bman_ip_rev == BMAN_REV20 ? 8 : BM_POOL_MAX); i++) {
+ 			err =  bm_shutdown_pool(i);
+ 			if (err) {
+ 				dev_err(dev, "Failed to shutdown bpool %d\n",
+diff --git a/drivers/soc/fsl/qbman/qman_ccsr.c b/drivers/soc/fsl/qbman/qman_ccsr.c
+--- a/drivers/soc/fsl/qbman/qman_ccsr.c
++++ b/drivers/soc/fsl/qbman/qman_ccsr.c
+@@ -718,8 +718,8 @@
+ 	}
+ 
+ 	/* parse pool channels into the SDQCR mask */
+-	for (i = 0; i < cgrid_num; i++)
+-		qm_pools_sdqcr |= QM_SDQCR_CHANNELS_POOL_CONV(i);
++	for (i = 0; i < pool_chan_num; i++)
++		qm_pools_sdqcr |= QM_SDQCR_CHANNELS_POOL(i + 1);
+ 
+ 	ret = gen_pool_add(qm_fqalloc, QM_FQID_RANGE_START | DPAA_GENALLOC_OFF,
+ 			   qm_get_fqid_maxcnt() - QM_FQID_RANGE_START, -1);

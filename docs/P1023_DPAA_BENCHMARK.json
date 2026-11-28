@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-28",
+  "hardware": "Cisco AIR-CAP3702I-E-K9, P1023, 2 x 800 MHz, 512 MiB RAM",
+  "kernel": "5.15.132",
+  "compiler": "OpenWrt GCC 12.3.0",
+  "iperf_client": "3.17.1",
+  "iperf_server": "3.12",
+  "protocol": "TCP",
+  "streams": 1,
+  "seconds": 20,
+  "omit_seconds": 3,
+  "mtu": 1500,
+  "throughput": "receiver reports; decimal Mbit/s",
+  "cpu": "whole AP /proc/stat deltas, including warmup and sampling overhead; busy excludes idle and iowait",
+  "runs": [
+    {
+      "direction": "tx",
+      "run": 1,
+      "received_mbps": 607.9357892567195,
+      "cpu_percent": {
+        "cpu": 64.36,
+        "cpu0": 68.2,
+        "cpu1": 60.53
+      },
+      "retransmits": 25
+    },
+    {
+      "direction": "tx",
+      "run": 2,
+      "received_mbps": 642.9399975705517,
+      "cpu_percent": {
+        "cpu": 67.55,
+        "cpu0": 68.2,
+        "cpu1": 66.89
+      },
+      "retransmits": 37
+    },
+    {
+      "direction": "tx",
+      "run": 3,
+      "received_mbps": 570.7694962694028,
+      "cpu_percent": {
+        "cpu": 62.56,
+        "cpu0": 61.78,
+        "cpu1": 63.34
+      },
+      "retransmits": 3133
+    },
+    {
+      "direction": "rx",
+      "run": 1,
+      "received_mbps": 803.5971974039827,
+      "cpu_percent": {
+        "cpu": 89.89,
+        "cpu0": 97.47,
+        "cpu1": 82.31
+      },
+      "retransmits": 324
+    },
+    {
+      "direction": "rx",
+      "run": 2,
+      "received_mbps": 778.0279481452293,
+      "cpu_percent": {
+        "cpu": 87.55,
+        "cpu0": 95.49,
+        "cpu1": 79.62
+      },
+      "retransmits": 152
+    },
+    {
+      "direction": "rx",
+      "run": 3,
+      "received_mbps": 818.9272743837209,
+      "cpu_percent": {
+        "cpu": 93.75,
+        "cpu0": 96.58,
+        "cpu1": 90.92
+      },
+      "retransmits": 185
+    }
+  ]
+}

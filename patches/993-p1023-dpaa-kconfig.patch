@@ -1,0 +1,33 @@
+From: Legodev <legodevgit@mailbox.org>
+Subject: [PATCH] net: freescale: select dependencies for external P1023 DPAA driver
+
+PAGE_POOL is a hidden Kconfig symbol in Linux 5.15. Merely putting it in
+a configuration fragment is not sufficient: olddefconfig clears it unless
+a driver selects it. Add a dependency selector for the external board
+driver.
+
+Signed-off-by: Legodev <legodevgit@mailbox.org>
+
+diff --git a/drivers/net/ethernet/freescale/Kconfig b/drivers/net/ethernet/freescale/Kconfig
+--- a/drivers/net/ethernet/freescale/Kconfig
++++ b/drivers/net/ethernet/freescale/Kconfig
+@@ -100,6 +100,19 @@ config GIANFAR
+ 	  and MPC86xx family of chips, the eTSEC on LS1021A and the FEC
+ 	  on the 8540.
+ 
++config P1023_FMAN_DPAA
++	tristate "Cisco P1023 FMan DPAA Ethernet (external module)"
++	depends on FSL_DPAA && OF && HAS_DMA
++	select PAGE_POOL
++	select PHYLIB
++	select FSL_PQ_MDIO
++	help
++	  Select dependencies for the external Cisco P1023 board driver.
++	  Build cisco_dpaa_bus and p1023_fman_dpaa from the board repository
++	  against this kernel after enabling this option.
++	  This option does not build the modules inside the kernel tree.
++	  The board driver replaces FMan Independent Mode on the 3702I.
++
+ source "drivers/net/ethernet/freescale/dpaa/Kconfig"
+ source "drivers/net/ethernet/freescale/dpaa2/Kconfig"
+ source "drivers/net/ethernet/freescale/enetc/Kconfig"

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR AGPL-3.0-or-later
+/* Alternative Ethernet backend; keep the board's flash and SMP layout. */
+/include/ "cisco-3702i.dts"
+
+/delete-node/ &enet0;
+&soc {
+	/delete-node/ mdio@24000;
+};
+
+/ {
+	aliases {
+		ethernet0 = &dpaa_eth;
+	};
+};
+
+/include/ "cisco-dpaa.dtsi"
