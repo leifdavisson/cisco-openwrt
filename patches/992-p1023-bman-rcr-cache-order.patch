@@ -1,0 +1,26 @@
+From: Legodev <legodevgit@mailbox.org>
+Subject: [PATCH] soc: fsl: bman: publish RCR tail before the valid bit
+
+An RCR entry spans two cache lines on e500. Flush its second half before
+publishing the verb in the first half, so BMan cannot consume stale buffer
+addresses while the second line is still dirty in the CPU cache.
+
+Signed-off-by: Legodev <legodevgit@mailbox.org>
+
+diff --git a/drivers/soc/fsl/qbman/bman.c b/drivers/soc/fsl/qbman/bman.c
+--- a/drivers/soc/fsl/qbman/bman.c
++++ b/drivers/soc/fsl/qbman/bman.c
+@@ -367,8 +367,12 @@
+ 	DPAA_ASSERT(rcr->busy);
+ 	DPAA_ASSERT(rcr->pmode == bm_rcr_pvb);
+ 	DPAA_ASSERT(rcr->available >= 1);
+-	dma_wmb();
+ 	rcursor = rcr->cursor;
++#if defined(CONFIG_PPC) && L1_CACHE_BYTES == 32
++	flush_dcache_range((unsigned long)rcursor + 32,
++			   (unsigned long)rcursor + 64);
++#endif
++	dma_wmb();
+ 	rcursor->_ncw_verb = myverb | rcr->vbit;
+ 	dpaa_flush(rcursor);
+ 	rcr_inc(rcr);

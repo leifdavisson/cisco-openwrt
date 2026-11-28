@@ -1,0 +1,112 @@
+/* P1023 DPAA: one portal window, Linux QMan/BMan, board FMan driver. */
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		bman_fbpr: bman-fbpr@1c000000 {
+			compatible = "fsl,bman-fbpr";
+			reg = <0 0x1c000000 0 0x01000000>;
+			no-map;
+		};
+		qman_fqd: qman-fqd@1d000000 {
+			compatible = "fsl,qman-fqd";
+			reg = <0 0x1d000000 0 0x00400000>;
+			no-map;
+		};
+		qman_pfdr: qman-pfdr@1e000000 {
+			compatible = "fsl,qman-pfdr";
+			reg = <0 0x1e000000 0 0x02000000>;
+			no-map;
+		};
+	};
+
+	/* Not a simple-bus: cisco_dpaa_bus installs the LAW before population. */
+	dpaa@e0000c08 {
+		compatible = "cisco,p1023-dpaa";
+		reg = <0 0xe0000c08 0 0x180>;
+		cisco,portal-base = <0xff000000>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0 0 0 0xffffffff>;
+		interrupt-parent = <&mpic>;
+
+		qman@e0088000 {
+			compatible = "fsl,qman";
+			reg = <0xe0088000 0x1000>;
+			interrupts = <16 2>;
+			fsl,qman-portals = <&qportals>;
+			memory-region = <&qman_fqd &qman_pfdr>;
+		};
+		bman@e008a000 {
+			compatible = "fsl,bman";
+			reg = <0xe008a000 0x1000>;
+			interrupts = <16 2>;
+			fsl,bman-portals = <&bportals>;
+			memory-region = <&bman_fbpr>;
+		};
+
+		qportals: qman-portals@ff000000 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0xff000000 0x200000>;
+			qman-portal@0 {
+				compatible = "fsl,qman-portal";
+				reg = <0 0x4000>, <0x100000 0x1000>;
+				interrupts = <29 2>;
+				cell-index = <0>;
+			};
+			qman-portal@4000 {
+				compatible = "fsl,qman-portal";
+				reg = <0x4000 0x4000>, <0x101000 0x1000>;
+				interrupts = <31 2>;
+				cell-index = <1>;
+			};
+			/* Enumerated by Linux after the two CPU portals. */
+			qman-portal@8000 {
+				compatible = "fsl,qman-portal";
+				reg = <0x8000 0x4000>, <0x102000 0x1000>;
+				interrupts = <33 2>;
+				cell-index = <2>;
+			};
+		};
+		bportals: bman-portals@ff200000 {
+			compatible = "simple-bus";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0xff200000 0x200000>;
+			bman-portal@0 {
+				compatible = "fsl,bman-portal";
+				reg = <0 0x4000>, <0x100000 0x1000>;
+				interrupts = <30 2>;
+			};
+			bman-portal@4000 {
+				compatible = "fsl,bman-portal";
+				reg = <0x4000 0x4000>, <0x101000 0x1000>;
+				interrupts = <32 2>;
+			};
+			bman-portal@8000 {
+				compatible = "fsl,bman-portal";
+				reg = <0x8000 0x4000>, <0x102000 0x1000>;
+				interrupts = <34 2>;
+			};
+		};
+
+		mdio@e01e1120 {
+			compatible = "fsl,fman-mdio";
+			reg = <0xe01e1120 0xee0>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			dpaa_phy: ethernet-phy@0 {
+				reg = <0>;
+			};
+		};
+		dpaa_eth: ethernet@e0100000 {
+			compatible = "cisco,p1023-fman-dpaa";
+			reg = <0xe0100000 0x100000>;
+			phy-handle = <&dpaa_phy>;
+			phy-connection-type = "rgmii-id";
+		};
+	};
+};

@@ -28,6 +28,7 @@ Bootable OpenWrt port for the **Cisco Aironet AIR-CAP3702I** (and AIR-CAP3602I) 
 
 ## Documentation Index
 
+- **[docs/P1023_DPAA.md](docs/P1023_DPAA.md)**: Optional QMan/BMan Ethernet backend with page-pool RX, scatter/gather TX, hardware checksums, kernel rebuild instructions and three-run iperf3 results (608 Mbit/s TX / 804 Mbit/s RX median on a 3702I).
 - **[docs/HOWTO.md](docs/HOWTO.md)**: Step-by-step guide for loading `openwrt-3702i.bin` via TFTP/NOR flash and building from source.
 - **[docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md](docs/WIFI_PERFORMANCE_TESTING_AND_PLAN.md)**: Verified benchmark progression, `/proc/stat` CPU saturation proof, `flashfs` calibration findings, and next-step verification commands.
 - **[docs/WIFI_PERFORMANCE.md](docs/WIFI_PERFORMANCE.md)**: Hardware/firmware investigation of the 3702i radio and Ethernet data path (Marco Mata + `ld-branch` follow-up).
